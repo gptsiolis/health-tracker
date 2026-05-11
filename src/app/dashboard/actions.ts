@@ -300,11 +300,21 @@ export async function saveDailyOutputs(formData: FormData) {
     }
   }
 
+  const { data } = await supabase
+    .from("symptoms")
+    .select("notes")
+    .eq("date", journalDate)
+    .maybeSingle();
+  const symptomMeta = parseSymptomMeta(data?.notes ?? null);
+
   const { error } = await supabase.from("symptoms").upsert({
     user_id: userId,
     date: journalDate,
     scores,
-    notes: optionalText(formData.get("symptom_notes")),
+    notes: formatSymptomNotes({
+      deletedSymptoms: symptomMeta.deletedSymptoms,
+      text: optionalText(formData.get("symptom_notes")) ?? "",
+    }),
   });
 
   if (error) {
@@ -441,16 +451,24 @@ export async function addSymptomDefinition(formData: FormData) {
     .eq("date", journalDate)
     .maybeSingle();
 
+  const symptomMeta = parseSymptomMeta(data?.notes ?? null);
   const scores = {
+    ...defaultSymptomScores(),
     ...((data?.scores as Record<string, number> | null) ?? {}),
     [symptomKey(name)]: 5,
   };
+  const deletedSymptoms = symptomMeta.deletedSymptoms.filter(
+    (symptom) => symptom !== symptomKey(name),
+  );
 
   const { error } = await supabase.from("symptoms").upsert({
     user_id: userId,
     date: journalDate,
     scores,
-    notes: data?.notes ?? null,
+    notes: formatSymptomNotes({
+      deletedSymptoms,
+      text: symptomMeta.text,
+    }),
   });
 
   if (error) {
@@ -478,16 +496,24 @@ export async function deleteSymptomDefinition(formData: FormData) {
     .eq("date", journalDate)
     .maybeSingle();
 
+  const symptomMeta = parseSymptomMeta(data?.notes ?? null);
   const scores: Record<string, number> = {
-    ...((data?.scores as Record<string, number> | null) ?? defaultSymptomScores()),
+    ...defaultSymptomScores(),
+    ...((data?.scores as Record<string, number> | null) ?? {}),
   };
+  const deletedSymptoms = Array.from(
+    new Set([...symptomMeta.deletedSymptoms, key]),
+  );
   delete scores[key];
 
   const { error } = await supabase.from("symptoms").upsert({
     user_id: userId,
     date: journalDate,
     scores,
-    notes: data?.notes ?? null,
+    notes: formatSymptomNotes({
+      deletedSymptoms,
+      text: symptomMeta.text,
+    }),
   });
 
   if (error) {
@@ -507,6 +533,36 @@ function defaultSymptomScores() {
     brain_fog: 5,
     mood: 5,
   };
+}
+
+function parseSymptomMeta(notes: string | null) {
+  if (!notes) {
+    return { deletedSymptoms: [] as string[], text: "" };
+  }
+
+  try {
+    const parsed = JSON.parse(notes) as {
+      deletedSymptoms?: string[];
+      text?: string;
+    };
+
+    return {
+      deletedSymptoms: parsed.deletedSymptoms ?? [],
+      text: parsed.text ?? "",
+    };
+  } catch {
+    return { deletedSymptoms: [] as string[], text: notes };
+  }
+}
+
+function formatSymptomNotes({
+  deletedSymptoms,
+  text,
+}: {
+  deletedSymptoms: string[];
+  text: string;
+}) {
+  return JSON.stringify({ deletedSymptoms, text });
 }
 
 function symptomKey(name: string) {

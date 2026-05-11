@@ -3,7 +3,6 @@ import Link from "next/link";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import {
   addSymptomDefinition,
-  deleteEntry,
   deleteSymptomDefinition,
   saveDailyJournalNote,
   saveDailyOutputs,
@@ -236,59 +235,20 @@ export default async function DashboardPage({
           variables={(variables.data ?? []) as Variable[]}
         />
 
-        <section className="grid gap-6 pb-10 lg:grid-cols-2">
+        <section className="pb-8">
           <DailyJournalPanel
             note={(dailyJournalNote.data as DailyJournalNote | null)?.notes ?? ""}
             selectedDate={selectedDate}
           />
+        </section>
+
+        <div className="mb-8 border-t border-slate-300" />
+
+        <section className="pb-10">
           <DailyOutputsPanel
             selectedDate={selectedDate}
             symptoms={(symptoms.data ?? []) as SymptomEntry[]}
           />
-        </section>
-
-        <section className="grid gap-6 pb-10 lg:grid-cols-2">
-          <EntryPanel title="Recent foods">
-            <FoodList
-              entries={(foods.data ?? []) as FoodEntry[]}
-              selectedDate={selectedDate}
-            />
-          </EntryPanel>
-
-          <EntryPanel title="Sleep">
-            <SleepList
-              entries={(sleep.data ?? []) as SleepEntry[]}
-              selectedDate={selectedDate}
-            />
-          </EntryPanel>
-
-          <EntryPanel title="Recent symptoms">
-            <SymptomList
-              entries={(symptoms.data ?? []) as SymptomEntry[]}
-              selectedDate={selectedDate}
-            />
-          </EntryPanel>
-
-          <EntryPanel title="Recent supplements">
-            <SupplementList
-              entries={(supplements.data ?? []) as SupplementEntry[]}
-              selectedDate={selectedDate}
-            />
-          </EntryPanel>
-
-          <EntryPanel title="Recent exercise">
-            <ExerciseList
-              entries={(exercise.data ?? []) as ExerciseEntry[]}
-              selectedDate={selectedDate}
-            />
-          </EntryPanel>
-
-          <EntryPanel title="Recent locations">
-            <LocationList
-              entries={(locations.data ?? []) as LocationEntry[]}
-              selectedDate={selectedDate}
-            />
-          </EntryPanel>
         </section>
 
         <section className="pb-10">
@@ -299,7 +259,6 @@ export default async function DashboardPage({
               locations={(locations.data ?? []) as LocationEntry[]}
               sleep={(sleep.data ?? []) as SleepEntry[]}
               supplements={(supplements.data ?? []) as SupplementEntry[]}
-              symptoms={(symptoms.data ?? []) as SymptomEntry[]}
             />
           </EntryPanel>
         </section>
@@ -346,7 +305,13 @@ function DailyOutputsPanel({
   symptoms: SymptomEntry[];
 }) {
   const current = symptoms[0];
-  const scores = current?.scores ?? defaultSymptomScores();
+  const symptomMeta = parseSymptomMeta(current?.notes ?? null);
+  const scores = Object.fromEntries(
+    Object.entries({
+      ...defaultSymptomScores(),
+      ...(current?.scores ?? {}),
+    }).filter(([key]) => !symptomMeta.deletedSymptoms.includes(key)),
+  );
   const scoreEntries = Object.entries(scores);
 
   return (
@@ -384,10 +349,11 @@ function DailyOutputsPanel({
               <input name="journal_date" type="hidden" value={selectedDate} />
               <input name="symptom_key" type="hidden" value={key} />
               <button
-                className="mb-0.5 rounded-md border border-red-200 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50"
+                aria-label={`Remove ${formatSymptomLabel(key)}`}
+                className="mb-0.5 flex h-7 w-7 items-center justify-center rounded-md border border-red-200 text-base font-medium text-red-700 hover:bg-red-50"
                 type="submit"
               >
-                Delete
+                ×
               </button>
             </form>
           </div>
@@ -396,7 +362,7 @@ function DailyOutputsPanel({
           <span className="text-sm font-medium text-slate-800">Notes</span>
           <textarea
             className="mt-1 min-h-24 w-full rounded-md border border-slate-300 px-3 py-2 text-slate-950 outline-none focus:border-teal-700"
-            defaultValue={current?.notes ?? ""}
+            defaultValue={symptomMeta.text}
             name="symptom_notes"
           />
         </label>
@@ -420,6 +386,26 @@ function defaultSymptomScores() {
     brain_fog: 5,
     mood: 5,
   };
+}
+
+function parseSymptomMeta(notes: string | null) {
+  if (!notes) {
+    return { deletedSymptoms: [] as string[], text: "" };
+  }
+
+  try {
+    const parsed = JSON.parse(notes) as {
+      deletedSymptoms?: string[];
+      text?: string;
+    };
+
+    return {
+      deletedSymptoms: parsed.deletedSymptoms ?? [],
+      text: parsed.text ?? "",
+    };
+  } catch {
+    return { deletedSymptoms: [] as string[], text: notes };
+  }
 }
 
 function formatSymptomLabel(value: string) {
@@ -478,235 +464,6 @@ function EmptyList() {
   return <p className="text-sm text-slate-500">No entries yet.</p>;
 }
 
-function FoodList({
-  entries,
-  selectedDate,
-}: {
-  entries: FoodEntry[];
-  selectedDate: string;
-}) {
-  if (entries.length === 0) {
-    return <EmptyList />;
-  }
-
-  return (
-    <ul className="space-y-3">
-      {entries.map((entry) => (
-        <li className="border-b border-slate-100 pb-3 last:border-0" key={entry.id}>
-          <ListItemHeader
-            id={entry.id}
-            selectedDate={selectedDate}
-            table="foods"
-            title={
-              entry.foods_list.length > 0
-                ? entry.foods_list.join(", ")
-                : "Food entry"
-            }
-          />
-          <p className="mt-1 text-sm text-slate-600">
-            {entry.calories ?? "No calories"} cal, protein{" "}
-            {entry.protein ?? "not set"}g, carbs {entry.carbs ?? "not set"}g,
-            fat {entry.fat ?? "not set"}g
-          </p>
-          <p className="mt-1 text-xs text-slate-500">
-            {formatDateTime(entry.eaten_at)} · {entry.source}
-          </p>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function SleepList({
-  entries,
-  selectedDate,
-}: {
-  entries: SleepEntry[];
-  selectedDate: string;
-}) {
-  if (entries.length === 0) {
-    return <EmptyList />;
-  }
-
-  return (
-    <ul className="space-y-3">
-      {entries.map((entry) => (
-        <li className="border-b border-slate-100 pb-3 last:border-0" key={entry.id}>
-          <ListItemHeader
-            id={entry.id}
-            selectedDate={selectedDate}
-            table="sleep"
-            title={`${entry.hours ?? "No"} hours asleep`}
-          />
-          <p className="mt-1 text-sm text-slate-600">
-            Score {entry.sleep_score ?? "not set"}, RHR {entry.rhr ?? "not set"},
-            HRV {entry.hrv ?? "not set"}
-          </p>
-          <p className="mt-1 text-xs text-slate-500">
-            {formatDateTime(entry.bedtime)} to {formatDateTime(entry.wake_time)}
-          </p>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function SymptomList({
-  entries,
-  selectedDate,
-}: {
-  entries: SymptomEntry[];
-  selectedDate: string;
-}) {
-  if (entries.length === 0) {
-    return <EmptyList />;
-  }
-
-  return (
-    <ul className="space-y-3">
-      {entries.map((entry) => (
-        <li className="border-b border-slate-100 pb-3 last:border-0" key={entry.id}>
-          <ListItemHeader
-            id={entry.id}
-            selectedDate={selectedDate}
-            table="symptoms"
-            title={entry.date}
-          />
-          <p className="mt-1 text-sm text-slate-600">
-            Fatigue {entry.scores.fatigue}, pain {entry.scores.pain}, brain fog{" "}
-            {entry.scores.brain_fog}, mood {entry.scores.mood}
-          </p>
-          {entry.notes ? <p className="mt-1 text-sm text-slate-500">{entry.notes}</p> : null}
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function SupplementList({
-  entries,
-  selectedDate,
-}: {
-  entries: SupplementEntry[];
-  selectedDate: string;
-}) {
-  if (entries.length === 0) {
-    return <EmptyList />;
-  }
-
-  return (
-    <ul className="space-y-3">
-      {entries.map((entry) => (
-        <li className="border-b border-slate-100 pb-3 last:border-0" key={entry.id}>
-          <ListItemHeader
-            id={entry.id}
-            selectedDate={selectedDate}
-            table="supplements"
-            title={entry.name}
-          />
-          <p className="mt-1 text-sm text-slate-600">
-            {[entry.dose, entry.unit].filter(Boolean).join(" ")} on{" "}
-            {formatDateTime(entry.taken_at)}
-          </p>
-          {entry.notes ? <p className="mt-1 text-sm text-slate-500">{entry.notes}</p> : null}
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function ExerciseList({
-  entries,
-  selectedDate,
-}: {
-  entries: ExerciseEntry[];
-  selectedDate: string;
-}) {
-  if (entries.length === 0) {
-    return <EmptyList />;
-  }
-
-  return (
-    <ul className="space-y-3">
-      {entries.map((entry) => (
-        <li className="border-b border-slate-100 pb-3 last:border-0" key={entry.id}>
-          <ListItemHeader
-            id={entry.id}
-            selectedDate={selectedDate}
-            table="exercise"
-            title={entry.type}
-          />
-          <p className="mt-1 text-sm text-slate-600">
-            {entry.duration_min ?? "No duration"} min, intensity{" "}
-            {entry.intensity ?? "not set"} on {formatDateTime(entry.done_at)}
-          </p>
-          {entry.notes ? <p className="mt-1 text-sm text-slate-500">{entry.notes}</p> : null}
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function LocationList({
-  entries,
-  selectedDate,
-}: {
-  entries: LocationEntry[];
-  selectedDate: string;
-}) {
-  if (entries.length === 0) {
-    return <EmptyList />;
-  }
-
-  return (
-    <ul className="space-y-3">
-      {entries.map((entry) => (
-        <li className="border-b border-slate-100 pb-3 last:border-0" key={entry.id}>
-          <ListItemHeader
-            id={entry.id}
-            selectedDate={selectedDate}
-            table="location"
-            title={entry.label}
-          />
-          <p className="mt-1 text-sm text-slate-600">
-            {formatDateTime(entry.started_at)} to{" "}
-            {entry.ended_at ? formatDateTime(entry.ended_at) : "now"}
-          </p>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function ListItemHeader({
-  id,
-  selectedDate,
-  table,
-  title,
-}: {
-  id: string;
-  selectedDate: string;
-  table: string;
-  title: string;
-}) {
-  return (
-    <div className="flex items-start justify-between gap-3">
-      <p className="font-medium text-slate-950">{title}</p>
-      <form action={deleteEntry}>
-        <input name="id" type="hidden" value={id} />
-        <input name="table" type="hidden" value={table} />
-        <input name="journal_date" type="hidden" value={selectedDate} />
-        <button
-          className="rounded-md border border-red-200 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50"
-          type="submit"
-        >
-          Delete
-        </button>
-      </form>
-    </div>
-  );
-}
-
 type TimelineItem = {
   id: string;
   time: string | null;
@@ -720,22 +477,14 @@ function Timeline({
   locations,
   sleep,
   supplements,
-  symptoms,
 }: {
   exercise: ExerciseEntry[];
   foods: FoodEntry[];
   locations: LocationEntry[];
   sleep: SleepEntry[];
   supplements: SupplementEntry[];
-  symptoms: SymptomEntry[];
 }) {
   const items: TimelineItem[] = [
-    ...symptoms.map((entry) => ({
-      id: `symptoms-${entry.id}`,
-      time: null,
-      title: "Symptoms",
-      detail: `Fatigue ${entry.scores.fatigue}, pain ${entry.scores.pain}, brain fog ${entry.scores.brain_fog}, mood ${entry.scores.mood}`,
-    })),
     ...foods.map((entry) => ({
       id: `food-${entry.id}`,
       time: timeFromDateTime(entry.eaten_at),
@@ -834,22 +583,5 @@ function timeFromDateTime(value: string) {
   return new Intl.DateTimeFormat("en", {
     hour: "numeric",
     minute: "2-digit",
-  }).format(date);
-}
-
-function formatDateTime(value: string | null) {
-  if (!value) {
-    return "Not set";
-  }
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return "Invalid date";
-  }
-
-  return new Intl.DateTimeFormat("en", {
-    dateStyle: "medium",
-    timeStyle: "short",
   }).format(date);
 }
