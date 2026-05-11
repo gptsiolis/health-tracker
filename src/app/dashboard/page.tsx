@@ -1,9 +1,11 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { saveDailyEntry } from "./actions";
+import { saveDailyEntry, saveManualFood } from "./actions";
 
 type DashboardPageProps = {
   searchParams: Promise<{
+    date?: string;
     message?: string;
   }>;
 };
@@ -40,10 +42,24 @@ type LocationEntry = {
   ended_at: string | null;
 };
 
+type FoodEntry = {
+  id: string;
+  calories: number | null;
+  protein: number | null;
+  carbs: number | null;
+  fat: number | null;
+  foods_list: string[];
+  eaten_at: string;
+  source: string;
+};
+
 export default async function DashboardPage({
   searchParams,
 }: DashboardPageProps) {
-  const { message } = await searchParams;
+  const { date, message } = await searchParams;
+  const selectedDate = date && isValidDateOnly(date) ? date : todayDate();
+  const nextDate = addDays(selectedDate, 1);
+  const selectedDateLabel = formatDateOnly(selectedDate);
   const supabase = await createServerSupabaseClient();
   const {
     data: { user },
@@ -53,26 +69,40 @@ export default async function DashboardPage({
     redirect("/login");
   }
 
-  const [symptoms, supplements, exercise, locations] = await Promise.all([
+  const [symptoms, supplements, exercise, locations, foods] = await Promise.all([
     supabase
       .from("symptoms")
       .select("id, date, scores, notes")
+      .eq("date", selectedDate)
       .order("date", { ascending: false })
       .limit(7),
     supabase
       .from("supplements")
       .select("id, name, dose, unit, taken_at, notes")
+      .gte("taken_at", selectedDate)
+      .lt("taken_at", nextDate)
       .order("taken_at", { ascending: false })
       .limit(7),
     supabase
       .from("exercise")
       .select("id, type, duration_min, intensity, done_at, notes")
+      .gte("done_at", selectedDate)
+      .lt("done_at", nextDate)
       .order("done_at", { ascending: false })
       .limit(7),
     supabase
       .from("location")
       .select("id, label, started_at, ended_at")
+      .gte("started_at", selectedDate)
+      .lt("started_at", nextDate)
       .order("started_at", { ascending: false })
+      .limit(7),
+    supabase
+      .from("foods")
+      .select("id, calories, protein, carbs, fat, foods_list, eaten_at, source")
+      .gte("eaten_at", selectedDate)
+      .lt("eaten_at", nextDate)
+      .order("eaten_at", { ascending: false })
       .limit(7),
   ]);
 
@@ -89,15 +119,50 @@ export default async function DashboardPage({
             </p>
           </div>
 
-          <form action="/logout" method="post">
+          <div className="flex flex-wrap gap-3">
+            <Link
+              className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-800 hover:bg-white"
+              href="/cronometer"
+            >
+              Cronometer upload
+            </Link>
+            <form action="/logout" method="post">
+              <button
+                className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-800 hover:bg-white"
+                type="submit"
+              >
+                Log out
+              </button>
+            </form>
+          </div>
+        </header>
+
+        <section className="flex flex-col gap-3 border-b border-slate-200 py-6 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-sm font-medium text-slate-500">Journal date</p>
+            <h2 className="text-2xl font-semibold text-slate-950">
+              {selectedDateLabel}
+            </h2>
+          </div>
+
+          <form className="flex items-end gap-3" method="get">
+            <label className="block">
+              <span className="text-sm font-medium text-slate-800">Change date</span>
+              <input
+                className="mt-1 rounded-md border border-slate-300 px-3 py-2 text-slate-950 outline-none focus:border-teal-700"
+                defaultValue={selectedDate}
+                name="date"
+                type="date"
+              />
+            </label>
             <button
               className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-800 hover:bg-white"
               type="submit"
             >
-              Log out
+              Go
             </button>
           </form>
-        </header>
+        </section>
 
         {message ? (
           <p className="mt-6 rounded-md border border-teal-200 bg-teal-50 px-4 py-3 text-sm text-teal-900">
@@ -106,10 +171,10 @@ export default async function DashboardPage({
         ) : null}
 
         <form action={saveDailyEntry} className="py-8">
+          <input name="journal_date" type="hidden" value={selectedDate} />
           <section className="grid gap-6 lg:grid-cols-2">
             <FormPanel title="Symptoms">
               <div className="space-y-4">
-                <TextInput label="Date" name="date" type="date" required />
                 <Slider label="Fatigue" name="fatigue" />
                 <Slider label="Pain" name="pain" />
                 <Slider label="Brain fog" name="brain_fog" />
@@ -131,9 +196,9 @@ export default async function DashboardPage({
                   <TextInput label="Unit" name="supplement_unit" placeholder="mg" />
                 </div>
                 <TextInput
-                  label="Taken at"
-                  name="supplement_taken_at"
-                  type="datetime-local"
+                  label="Time"
+                  name="supplement_time"
+                  type="time"
                 />
                 <TextArea label="Notes" name="supplement_notes" />
               </div>
@@ -162,9 +227,9 @@ export default async function DashboardPage({
                   />
                 </div>
                 <TextInput
-                  label="Done at"
-                  name="exercise_done_at"
-                  type="datetime-local"
+                  label="Time"
+                  name="exercise_time"
+                  type="time"
                 />
                 <TextArea label="Notes" name="exercise_notes" />
               </div>
@@ -178,14 +243,14 @@ export default async function DashboardPage({
                   placeholder="Home"
                 />
                 <TextInput
-                  label="Started at"
-                  name="location_started_at"
-                  type="datetime-local"
+                  label="Start time"
+                  name="location_start_time"
+                  type="time"
                 />
                 <TextInput
-                  label="Ended at"
-                  name="location_ended_at"
-                  type="datetime-local"
+                  label="End time"
+                  name="location_end_time"
+                  type="time"
                 />
               </div>
             </FormPanel>
@@ -201,7 +266,40 @@ export default async function DashboardPage({
           </div>
         </form>
 
+        <section className="pb-10">
+          <FormPanel title="Food">
+            <form action={saveManualFood} className="space-y-4">
+              <input name="journal_date" type="hidden" value={selectedDate} />
+              <TextInput
+                label="Time"
+                name="food_time"
+                type="time"
+              />
+              <div className="grid gap-4 sm:grid-cols-4">
+                <TextInput label="Calories" name="calories" type="number" />
+                <TextInput label="Protein" name="protein" type="number" step="0.1" />
+                <TextInput label="Carbs" name="carbs" type="number" step="0.1" />
+                <TextInput label="Fat" name="fat" type="number" step="0.1" />
+              </div>
+              <TextArea label="Foods list" name="foods_list" />
+              <TextArea label="Micros JSON" name="micros" />
+              <div className="flex justify-end">
+                <button
+                  className="rounded-md bg-teal-700 px-5 py-2.5 font-medium text-white hover:bg-teal-800"
+                  type="submit"
+                >
+                  Save food
+                </button>
+              </div>
+            </form>
+          </FormPanel>
+        </section>
+
         <section className="grid gap-6 pb-10 lg:grid-cols-2">
+          <EntryPanel title="Recent foods">
+            <FoodList entries={(foods.data ?? []) as FoodEntry[]} />
+          </EntryPanel>
+
           <EntryPanel title="Recent symptoms">
             <SymptomList entries={(symptoms.data ?? []) as SymptomEntry[]} />
           </EntryPanel>
@@ -218,6 +316,18 @@ export default async function DashboardPage({
 
           <EntryPanel title="Recent locations">
             <LocationList entries={(locations.data ?? []) as LocationEntry[]} />
+          </EntryPanel>
+        </section>
+
+        <section className="pb-10">
+          <EntryPanel title="Timeline">
+            <Timeline
+              exercise={(exercise.data ?? []) as ExerciseEntry[]}
+              foods={(foods.data ?? []) as FoodEntry[]}
+              locations={(locations.data ?? []) as LocationEntry[]}
+              supplements={(supplements.data ?? []) as SupplementEntry[]}
+              symptoms={(symptoms.data ?? []) as SymptomEntry[]}
+            />
           </EntryPanel>
         </section>
       </div>
@@ -319,6 +429,34 @@ function EmptyList() {
   return <p className="text-sm text-slate-500">No entries yet.</p>;
 }
 
+function FoodList({ entries }: { entries: FoodEntry[] }) {
+  if (entries.length === 0) {
+    return <EmptyList />;
+  }
+
+  return (
+    <ul className="space-y-3">
+      {entries.map((entry) => (
+        <li className="border-b border-slate-100 pb-3 last:border-0" key={entry.id}>
+          <p className="font-medium text-slate-950">
+            {entry.foods_list.length > 0
+              ? entry.foods_list.join(", ")
+              : "Food entry"}
+          </p>
+          <p className="mt-1 text-sm text-slate-600">
+            {entry.calories ?? "No calories"} cal, protein{" "}
+            {entry.protein ?? "not set"}g, carbs {entry.carbs ?? "not set"}g,
+            fat {entry.fat ?? "not set"}g
+          </p>
+          <p className="mt-1 text-xs text-slate-500">
+            {formatDateTime(entry.eaten_at)} · {entry.source}
+          </p>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function SymptomList({ entries }: { entries: SymptomEntry[] }) {
   if (entries.length === 0) {
     return <EmptyList />;
@@ -402,9 +540,137 @@ function LocationList({ entries }: { entries: LocationEntry[] }) {
   );
 }
 
+type TimelineItem = {
+  id: string;
+  time: string | null;
+  title: string;
+  detail: string;
+};
+
+function Timeline({
+  exercise,
+  foods,
+  locations,
+  supplements,
+  symptoms,
+}: {
+  exercise: ExerciseEntry[];
+  foods: FoodEntry[];
+  locations: LocationEntry[];
+  supplements: SupplementEntry[];
+  symptoms: SymptomEntry[];
+}) {
+  const items: TimelineItem[] = [
+    ...symptoms.map((entry) => ({
+      id: `symptoms-${entry.id}`,
+      time: null,
+      title: "Symptoms",
+      detail: `Fatigue ${entry.scores.fatigue}, pain ${entry.scores.pain}, brain fog ${entry.scores.brain_fog}, mood ${entry.scores.mood}`,
+    })),
+    ...foods.map((entry) => ({
+      id: `food-${entry.id}`,
+      time: timeFromDateTime(entry.eaten_at),
+      title:
+        entry.foods_list.length > 0 ? entry.foods_list.join(", ") : "Food entry",
+      detail: `${entry.calories ?? "No"} calories`,
+    })),
+    ...supplements.map((entry) => ({
+      id: `supplement-${entry.id}`,
+      time: timeFromDateTime(entry.taken_at),
+      title: entry.name,
+      detail: [entry.dose, entry.unit].filter(Boolean).join(" ") || "Supplement",
+    })),
+    ...exercise.map((entry) => ({
+      id: `exercise-${entry.id}`,
+      time: timeFromDateTime(entry.done_at),
+      title: entry.type,
+      detail: `${entry.duration_min ?? "No"} min, intensity ${entry.intensity ?? "not set"}`,
+    })),
+    ...locations.map((entry) => ({
+      id: `location-${entry.id}`,
+      time: timeFromDateTime(entry.started_at),
+      title: entry.label,
+      detail: entry.ended_at ? `Until ${timeFromDateTime(entry.ended_at)}` : "Location",
+    })),
+  ].sort((first, second) => {
+    if (!first.time && !second.time) return 0;
+    if (!first.time) return 1;
+    if (!second.time) return -1;
+    return first.time.localeCompare(second.time);
+  });
+
+  if (items.length === 0) {
+    return <EmptyList />;
+  }
+
+  return (
+    <ol className="space-y-3">
+      {items.map((item) => (
+        <li className="grid gap-3 border-b border-slate-100 pb-3 last:border-0 sm:grid-cols-[80px_1fr]" key={item.id}>
+          <p className="text-sm font-medium text-slate-500">
+            {item.time ?? "Anytime"}
+          </p>
+          <div>
+            <p className="font-medium text-slate-950">{item.title}</p>
+            <p className="mt-1 text-sm text-slate-600">{item.detail}</p>
+          </div>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function todayDate() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: "America/Vancouver",
+    year: "numeric",
+  }).formatToParts(new Date());
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function addDays(dateOnly: string, days: number) {
+  const date = new Date(`${dateOnly}T00:00:00`);
+  date.setDate(date.getDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function isValidDateOnly(value: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(new Date(value).getTime());
+}
+
+function formatDateOnly(value: string) {
+  return new Intl.DateTimeFormat("en", {
+    dateStyle: "long",
+    timeZone: "America/Vancouver",
+  }).format(new Date(`${value}T12:00:00`));
+}
+
+function timeFromDateTime(value: string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return new Intl.DateTimeFormat("en", {
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
+
 function formatDateTime(value: string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "Invalid date";
+  }
+
   return new Intl.DateTimeFormat("en", {
     dateStyle: "medium",
     timeStyle: "short",
-  }).format(new Date(value));
+  }).format(date);
 }
