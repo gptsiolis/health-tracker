@@ -185,19 +185,7 @@ export default async function DashboardPage({
               className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-800 hover:bg-white"
               href="/charts"
             >
-              Charts
-            </Link>
-            <Link
-              className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-800 hover:bg-white"
-              href="/cronometer"
-            >
-              Cronometer upload
-            </Link>
-            <Link
-              className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-800 hover:bg-white"
-              href="/whoop"
-            >
-              Whoop import
+              Data
             </Link>
             <form action="/logout" method="post">
               <button
@@ -219,11 +207,11 @@ export default async function DashboardPage({
             >
               ‹
             </Link>
-            <div>
-            <p className="text-sm font-medium text-slate-500">Journal date</p>
-            <h2 className="text-2xl font-semibold text-slate-950">
-              {selectedDateLabel}
-            </h2>
+            <div className="min-w-56 text-center">
+              <p className="text-sm font-medium text-slate-500">Journal date</p>
+              <h2 className="text-2xl font-semibold text-slate-950">
+                {selectedDateLabel}
+              </h2>
             </div>
             <Link
               aria-label="Next day"
