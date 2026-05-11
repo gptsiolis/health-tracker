@@ -168,3 +168,33 @@ export async function saveManualFood(formData: FormData) {
   revalidatePath("/dashboard");
   redirect(`/dashboard?date=${journalDate}&message=Food saved.`);
 }
+
+export async function deleteEntry(formData: FormData) {
+  const { supabase } = await getUserId();
+  const table = String(formData.get("table") ?? "");
+  const id = String(formData.get("id") ?? "");
+  const journalDate = selectedDate(formData);
+  const allowedTables = [
+    "exercise",
+    "foods",
+    "location",
+    "sleep",
+    "supplements",
+    "symptoms",
+  ];
+
+  if (!allowedTables.includes(table) || !id) {
+    redirect(`/dashboard?date=${journalDate}&message=Invalid delete request.`);
+  }
+
+  const { error } = await supabase.from(table).delete().eq("id", id);
+
+  if (error) {
+    redirect(
+      `/dashboard?date=${journalDate}&message=${encodeURIComponent(error.message)}`,
+    );
+  }
+
+  revalidatePath("/dashboard");
+  redirect(`/dashboard?date=${journalDate}&message=Entry deleted.`);
+}

@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { saveDailyEntry, saveManualFood } from "./actions";
+import { deleteEntry, saveDailyEntry, saveManualFood } from "./actions";
 
 type DashboardPageProps = {
   searchParams: Promise<{
@@ -327,29 +327,45 @@ export default async function DashboardPage({
 
         <section className="grid gap-6 pb-10 lg:grid-cols-2">
           <EntryPanel title="Recent foods">
-            <FoodList entries={(foods.data ?? []) as FoodEntry[]} />
+            <FoodList
+              entries={(foods.data ?? []) as FoodEntry[]}
+              selectedDate={selectedDate}
+            />
           </EntryPanel>
 
           <EntryPanel title="Sleep">
-            <SleepList entries={(sleep.data ?? []) as SleepEntry[]} />
+            <SleepList
+              entries={(sleep.data ?? []) as SleepEntry[]}
+              selectedDate={selectedDate}
+            />
           </EntryPanel>
 
           <EntryPanel title="Recent symptoms">
-            <SymptomList entries={(symptoms.data ?? []) as SymptomEntry[]} />
+            <SymptomList
+              entries={(symptoms.data ?? []) as SymptomEntry[]}
+              selectedDate={selectedDate}
+            />
           </EntryPanel>
 
           <EntryPanel title="Recent supplements">
             <SupplementList
               entries={(supplements.data ?? []) as SupplementEntry[]}
+              selectedDate={selectedDate}
             />
           </EntryPanel>
 
           <EntryPanel title="Recent exercise">
-            <ExerciseList entries={(exercise.data ?? []) as ExerciseEntry[]} />
+            <ExerciseList
+              entries={(exercise.data ?? []) as ExerciseEntry[]}
+              selectedDate={selectedDate}
+            />
           </EntryPanel>
 
           <EntryPanel title="Recent locations">
-            <LocationList entries={(locations.data ?? []) as LocationEntry[]} />
+            <LocationList
+              entries={(locations.data ?? []) as LocationEntry[]}
+              selectedDate={selectedDate}
+            />
           </EntryPanel>
         </section>
 
@@ -464,7 +480,13 @@ function EmptyList() {
   return <p className="text-sm text-slate-500">No entries yet.</p>;
 }
 
-function FoodList({ entries }: { entries: FoodEntry[] }) {
+function FoodList({
+  entries,
+  selectedDate,
+}: {
+  entries: FoodEntry[];
+  selectedDate: string;
+}) {
   if (entries.length === 0) {
     return <EmptyList />;
   }
@@ -473,11 +495,16 @@ function FoodList({ entries }: { entries: FoodEntry[] }) {
     <ul className="space-y-3">
       {entries.map((entry) => (
         <li className="border-b border-slate-100 pb-3 last:border-0" key={entry.id}>
-          <p className="font-medium text-slate-950">
-            {entry.foods_list.length > 0
-              ? entry.foods_list.join(", ")
-              : "Food entry"}
-          </p>
+          <ListItemHeader
+            id={entry.id}
+            selectedDate={selectedDate}
+            table="foods"
+            title={
+              entry.foods_list.length > 0
+                ? entry.foods_list.join(", ")
+                : "Food entry"
+            }
+          />
           <p className="mt-1 text-sm text-slate-600">
             {entry.calories ?? "No calories"} cal, protein{" "}
             {entry.protein ?? "not set"}g, carbs {entry.carbs ?? "not set"}g,
@@ -492,7 +519,13 @@ function FoodList({ entries }: { entries: FoodEntry[] }) {
   );
 }
 
-function SleepList({ entries }: { entries: SleepEntry[] }) {
+function SleepList({
+  entries,
+  selectedDate,
+}: {
+  entries: SleepEntry[];
+  selectedDate: string;
+}) {
   if (entries.length === 0) {
     return <EmptyList />;
   }
@@ -501,9 +534,12 @@ function SleepList({ entries }: { entries: SleepEntry[] }) {
     <ul className="space-y-3">
       {entries.map((entry) => (
         <li className="border-b border-slate-100 pb-3 last:border-0" key={entry.id}>
-          <p className="font-medium text-slate-950">
-            {entry.hours ?? "No"} hours asleep
-          </p>
+          <ListItemHeader
+            id={entry.id}
+            selectedDate={selectedDate}
+            table="sleep"
+            title={`${entry.hours ?? "No"} hours asleep`}
+          />
           <p className="mt-1 text-sm text-slate-600">
             Score {entry.sleep_score ?? "not set"}, RHR {entry.rhr ?? "not set"},
             HRV {entry.hrv ?? "not set"}
@@ -517,7 +553,13 @@ function SleepList({ entries }: { entries: SleepEntry[] }) {
   );
 }
 
-function SymptomList({ entries }: { entries: SymptomEntry[] }) {
+function SymptomList({
+  entries,
+  selectedDate,
+}: {
+  entries: SymptomEntry[];
+  selectedDate: string;
+}) {
   if (entries.length === 0) {
     return <EmptyList />;
   }
@@ -526,7 +568,12 @@ function SymptomList({ entries }: { entries: SymptomEntry[] }) {
     <ul className="space-y-3">
       {entries.map((entry) => (
         <li className="border-b border-slate-100 pb-3 last:border-0" key={entry.id}>
-          <p className="font-medium text-slate-950">{entry.date}</p>
+          <ListItemHeader
+            id={entry.id}
+            selectedDate={selectedDate}
+            table="symptoms"
+            title={entry.date}
+          />
           <p className="mt-1 text-sm text-slate-600">
             Fatigue {entry.scores.fatigue}, pain {entry.scores.pain}, brain fog{" "}
             {entry.scores.brain_fog}, mood {entry.scores.mood}
@@ -538,7 +585,13 @@ function SymptomList({ entries }: { entries: SymptomEntry[] }) {
   );
 }
 
-function SupplementList({ entries }: { entries: SupplementEntry[] }) {
+function SupplementList({
+  entries,
+  selectedDate,
+}: {
+  entries: SupplementEntry[];
+  selectedDate: string;
+}) {
   if (entries.length === 0) {
     return <EmptyList />;
   }
@@ -547,7 +600,12 @@ function SupplementList({ entries }: { entries: SupplementEntry[] }) {
     <ul className="space-y-3">
       {entries.map((entry) => (
         <li className="border-b border-slate-100 pb-3 last:border-0" key={entry.id}>
-          <p className="font-medium text-slate-950">{entry.name}</p>
+          <ListItemHeader
+            id={entry.id}
+            selectedDate={selectedDate}
+            table="supplements"
+            title={entry.name}
+          />
           <p className="mt-1 text-sm text-slate-600">
             {[entry.dose, entry.unit].filter(Boolean).join(" ")} on{" "}
             {formatDateTime(entry.taken_at)}
@@ -559,7 +617,13 @@ function SupplementList({ entries }: { entries: SupplementEntry[] }) {
   );
 }
 
-function ExerciseList({ entries }: { entries: ExerciseEntry[] }) {
+function ExerciseList({
+  entries,
+  selectedDate,
+}: {
+  entries: ExerciseEntry[];
+  selectedDate: string;
+}) {
   if (entries.length === 0) {
     return <EmptyList />;
   }
@@ -568,7 +632,12 @@ function ExerciseList({ entries }: { entries: ExerciseEntry[] }) {
     <ul className="space-y-3">
       {entries.map((entry) => (
         <li className="border-b border-slate-100 pb-3 last:border-0" key={entry.id}>
-          <p className="font-medium text-slate-950">{entry.type}</p>
+          <ListItemHeader
+            id={entry.id}
+            selectedDate={selectedDate}
+            table="exercise"
+            title={entry.type}
+          />
           <p className="mt-1 text-sm text-slate-600">
             {entry.duration_min ?? "No duration"} min, intensity{" "}
             {entry.intensity ?? "not set"} on {formatDateTime(entry.done_at)}
@@ -580,7 +649,13 @@ function ExerciseList({ entries }: { entries: ExerciseEntry[] }) {
   );
 }
 
-function LocationList({ entries }: { entries: LocationEntry[] }) {
+function LocationList({
+  entries,
+  selectedDate,
+}: {
+  entries: LocationEntry[];
+  selectedDate: string;
+}) {
   if (entries.length === 0) {
     return <EmptyList />;
   }
@@ -589,7 +664,12 @@ function LocationList({ entries }: { entries: LocationEntry[] }) {
     <ul className="space-y-3">
       {entries.map((entry) => (
         <li className="border-b border-slate-100 pb-3 last:border-0" key={entry.id}>
-          <p className="font-medium text-slate-950">{entry.label}</p>
+          <ListItemHeader
+            id={entry.id}
+            selectedDate={selectedDate}
+            table="location"
+            title={entry.label}
+          />
           <p className="mt-1 text-sm text-slate-600">
             {formatDateTime(entry.started_at)} to{" "}
             {entry.ended_at ? formatDateTime(entry.ended_at) : "now"}
@@ -597,6 +677,35 @@ function LocationList({ entries }: { entries: LocationEntry[] }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+function ListItemHeader({
+  id,
+  selectedDate,
+  table,
+  title,
+}: {
+  id: string;
+  selectedDate: string;
+  table: string;
+  title: string;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <p className="font-medium text-slate-950">{title}</p>
+      <form action={deleteEntry}>
+        <input name="id" type="hidden" value={id} />
+        <input name="table" type="hidden" value={table} />
+        <input name="journal_date" type="hidden" value={selectedDate} />
+        <button
+          className="rounded-md border border-red-200 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50"
+          type="submit"
+        >
+          Delete
+        </button>
+      </form>
+    </div>
   );
 }
 
