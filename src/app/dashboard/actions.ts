@@ -445,30 +445,10 @@ export async function addSymptomDefinition(formData: FormData) {
     redirect(`/dashboard?date=${journalDate}&message=Symptom needs a name.`);
   }
 
-  const { data } = await supabase
-    .from("symptoms")
-    .select("scores, notes")
-    .eq("date", journalDate)
-    .maybeSingle();
-
-  const symptomMeta = parseSymptomMeta(data?.notes ?? null);
-  const scores = {
-    ...defaultSymptomScores(),
-    ...((data?.scores as Record<string, number> | null) ?? {}),
-    [symptomKey(name)]: 5,
-  };
-  const deletedSymptoms = symptomMeta.deletedSymptoms.filter(
-    (symptom) => symptom !== symptomKey(name),
-  );
-
-  const { error } = await supabase.from("symptoms").upsert({
+  const { error } = await supabase.from("symptom_definitions").insert({
     user_id: userId,
-    date: journalDate,
-    scores,
-    notes: formatSymptomNotes({
-      deletedSymptoms,
-      text: symptomMeta.text,
-    }),
+    key: symptomKey(name),
+    name,
   });
 
   if (error) {
@@ -479,6 +459,30 @@ export async function addSymptomDefinition(formData: FormData) {
 
   revalidatePath("/dashboard");
   redirect(`/dashboard?date=${journalDate}&message=Symptom added.`);
+}
+
+export async function archiveSymptomDefinition(formData: FormData) {
+  const { supabase } = await getUserId();
+  const journalDate = selectedDate(formData);
+  const id = requiredText(formData.get("symptom_definition_id"));
+
+  if (!id) {
+    redirect(`/dashboard?date=${journalDate}&message=Invalid symptom.`);
+  }
+
+  const { error } = await supabase
+    .from("symptom_definitions")
+    .update({ archived_at: new Date().toISOString() })
+    .eq("id", id);
+
+  if (error) {
+    redirect(
+      `/dashboard?date=${journalDate}&message=${encodeURIComponent(error.message)}`,
+    );
+  }
+
+  revalidatePath("/dashboard");
+  redirect(`/dashboard?date=${journalDate}&message=Symptom deleted.`);
 }
 
 export async function deleteSymptomDefinition(formData: FormData) {

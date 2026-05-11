@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { SymptomManager } from "./symptom-manager";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import {
-  addSymptomDefinition,
   deleteSymptomDefinition,
   saveDailyJournalNote,
   saveDailyOutputs,
@@ -78,6 +78,12 @@ type DailyJournalNote = {
   notes: string;
 };
 
+type SymptomDefinition = {
+  id: string;
+  key: string;
+  name: string;
+};
+
 export default async function DashboardPage({
   searchParams,
 }: DashboardPageProps) {
@@ -105,6 +111,7 @@ export default async function DashboardPage({
     variables,
     journalEntries,
     dailyJournalNote,
+    symptomDefinitions,
   ] =
     await Promise.all([
     supabase
@@ -164,7 +171,32 @@ export default async function DashboardPage({
       .select("notes")
       .eq("date", selectedDate)
       .maybeSingle(),
+    supabase
+      .from("symptom_definitions")
+      .select("id, key, name")
+      .is("archived_at", null)
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: true }),
   ]);
+  let activeSymptomDefinitions = (symptomDefinitions.data ??
+    []) as SymptomDefinition[];
+
+  if (activeSymptomDefinitions.length === 0) {
+    const { data: seededSymptoms } = await supabase
+      .from("symptom_definitions")
+      .insert(
+        defaultSymptomDefinitions().map((definition, index) => ({
+          user_id: user.id,
+          key: definition.key,
+          name: definition.name,
+          sort_order: index,
+        })),
+      )
+      .select("id, key, name")
+      .order("sort_order", { ascending: true });
+
+    activeSymptomDefinitions = (seededSymptoms ?? []) as SymptomDefinition[];
+  }
 
   return (
     <main className="min-h-screen bg-slate-50 px-6 py-8">
@@ -247,6 +279,7 @@ export default async function DashboardPage({
         <section className="pb-10">
           <DailyOutputsPanel
             selectedDate={selectedDate}
+            symptomDefinitions={activeSymptomDefinitions}
             symptoms={(symptoms.data ?? []) as SymptomEntry[]}
           />
         </section>
@@ -299,18 +332,22 @@ function DailyJournalPanel({
 
 function DailyOutputsPanel({
   selectedDate,
+  symptomDefinitions,
   symptoms,
 }: {
   selectedDate: string;
+  symptomDefinitions: SymptomDefinition[];
   symptoms: SymptomEntry[];
 }) {
   const current = symptoms[0];
   const symptomMeta = parseSymptomMeta(current?.notes ?? null);
   const scores = Object.fromEntries(
-    Object.entries({
-      ...defaultSymptomScores(),
-      ...(current?.scores ?? {}),
-    }).filter(([key]) => !symptomMeta.deletedSymptoms.includes(key)),
+    symptomDefinitions
+      .filter((definition) => !symptomMeta.deletedSymptoms.includes(definition.key))
+      .map((definition) => [
+        definition.key,
+        current?.scores[definition.key] ?? 5,
+      ]),
   );
   const scoreEntries = Object.entries(scores);
 
@@ -318,21 +355,10 @@ function DailyOutputsPanel({
     <section className="rounded-md border border-slate-200 bg-white p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-lg font-medium text-slate-950">Daily symptoms</h2>
-        <form action={addSymptomDefinition} className="flex gap-2">
-          <input name="journal_date" type="hidden" value={selectedDate} />
-          <input
-            className="w-40 rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-950 outline-none focus:border-teal-700"
-            name="symptom_name"
-            placeholder="Add symptom"
-          />
-          <button
-            aria-label="Add symptom"
-            className="flex h-10 w-10 items-center justify-center rounded-md bg-teal-700 text-xl font-medium text-white hover:bg-teal-800"
-            type="submit"
-          >
-            +
-          </button>
-        </form>
+        <SymptomManager
+          selectedDate={selectedDate}
+          symptomDefinitions={symptomDefinitions}
+        />
       </div>
       <form action={saveDailyOutputs} className="mt-4 space-y-4">
         <input name="journal_date" type="hidden" value={selectedDate} />
@@ -341,9 +367,9 @@ function DailyOutputsPanel({
             <div className="flex-1">
               <OutputSlider
                 defaultValue={value}
-                label={formatSymptomLabel(key)}
-                name={`symptom_score_${key}`}
-              />
+            label={symptomDefinitions.find((definition) => definition.key === key)?.name ?? formatSymptomLabel(key)}
+            name={`symptom_score_${key}`}
+          />
             </div>
             <form action={deleteSymptomDefinition}>
               <input name="journal_date" type="hidden" value={selectedDate} />
@@ -379,13 +405,13 @@ function DailyOutputsPanel({
   );
 }
 
-function defaultSymptomScores() {
-  return {
-    fatigue: 5,
-    pain: 5,
-    brain_fog: 5,
-    mood: 5,
-  };
+function defaultSymptomDefinitions(): SymptomDefinition[] {
+  return [
+    { id: "default-fatigue", key: "fatigue", name: "Fatigue" },
+    { id: "default-pain", key: "pain", name: "Pain" },
+    { id: "default-brain-fog", key: "brain_fog", name: "Brain fog" },
+    { id: "default-mood", key: "mood", name: "Mood" },
+  ];
 }
 
 function parseSymptomMeta(notes: string | null) {

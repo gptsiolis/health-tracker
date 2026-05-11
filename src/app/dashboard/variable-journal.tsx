@@ -180,7 +180,7 @@ function BucketEntries({
       {entries.map((entry) => (
         <li className="border-b border-slate-100 pb-3 last:border-0" key={entry.id}>
           <div className="flex items-start justify-between gap-3">
-            <div>
+            <div className="min-w-0 flex-1">
               <p className="font-medium text-slate-950">
                 {variableName(entry) ?? bucketLabels[bucket]}
               </p>
@@ -189,19 +189,22 @@ function BucketEntries({
                 <p className="mt-1 text-sm text-slate-500">{entry.notes}</p>
               ) : null}
             </div>
-            <p className="text-sm font-medium text-slate-500">
-              {entry.time_of_day?.slice(0, 5) ?? "Anytime"}
-            </p>
-            <form action={deleteJournalEntry}>
-              <input name="id" type="hidden" value={entry.id} />
-              <input name="journal_date" type="hidden" value={selectedDate} />
-              <button
-                className="rounded-md border border-red-200 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50"
-                type="submit"
-              >
-                Delete
-              </button>
-            </form>
+            <div className="flex min-w-24 items-center justify-end gap-2">
+              <p className="w-14 text-right text-sm font-medium text-slate-500">
+                {entry.time_of_day?.slice(0, 5) ?? "Anytime"}
+              </p>
+              <form action={deleteJournalEntry}>
+                <input name="id" type="hidden" value={entry.id} />
+                <input name="journal_date" type="hidden" value={selectedDate} />
+                <button
+                  aria-label="Delete entry"
+                  className="flex h-7 w-7 items-center justify-center rounded-md border border-red-200 text-base font-medium text-red-700 hover:bg-red-50"
+                  type="submit"
+                >
+                  ×
+                </button>
+              </form>
+            </div>
           </div>
         </li>
       ))}
