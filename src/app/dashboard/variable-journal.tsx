@@ -207,9 +207,9 @@ function BucketEntries({
                 <p className="mt-1 text-sm text-slate-500">{entry.notes}</p>
               ) : null}
             </div>
-            <div className="flex min-w-24 items-center justify-end gap-2">
-              <p className="w-14 text-right text-sm font-medium text-slate-500">
-                {entry.time_of_day?.slice(0, 5) ?? "Anytime"}
+            <div className="flex min-w-28 items-center justify-end gap-2">
+              <p className="w-20 text-right text-sm font-medium text-slate-500">
+                {formatTimeOfDay(entry.time_of_day) ?? "Anytime"}
               </p>
               <form action={deleteJournalEntry}>
                 <input name="id" type="hidden" value={entry.id} />
@@ -467,7 +467,9 @@ function entrySummary(entry: JournalEntry) {
   }
 
   if (entry.bucket === "location") {
-    return entry.data.end_time ? `Until ${entry.data.end_time}` : "Location";
+    return entry.data.end_time
+      ? `Until ${formatTimeOfDay(String(entry.data.end_time))}`
+      : "Location";
   }
 
   if (entry.bucket === "sleep") {
@@ -514,4 +516,30 @@ function shouldShowTime(variable: Variable) {
   }
 
   return true;
+}
+
+function formatTimeOfDay(value: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  const [hoursText, minutesText] = value.split(":");
+  const hours = Number(hoursText);
+  const minutes = Number(minutesText);
+
+  if (
+    Number.isNaN(hours) ||
+    Number.isNaN(minutes) ||
+    hours < 0 ||
+    hours > 23 ||
+    minutes < 0 ||
+    minutes > 59
+  ) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("en", {
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(2000, 0, 1, hours, minutes));
 }
