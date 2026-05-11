@@ -105,7 +105,7 @@ export function VariableJournal({
           <input
             className="w-full rounded-md border border-slate-300 bg-white px-4 py-3 pr-14 text-lg text-slate-950 outline-none focus:border-teal-700"
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search variables..."
+            placeholder="Search..."
             value={query}
           />
           <button
