@@ -408,13 +408,18 @@ function TextInput({
   label: string;
   name: string;
 } & React.InputHTMLAttributes<HTMLInputElement>) {
+  const inputProps = {
+    step: props.type === "number" ? "any" : undefined,
+    ...props,
+  };
+
   return (
     <label className="block">
       <span className="text-sm font-medium text-slate-800">{label}</span>
       <input
         className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-slate-950 outline-none focus:border-teal-700"
         name={name}
-        {...props}
+        {...inputProps}
       />
     </label>
   );

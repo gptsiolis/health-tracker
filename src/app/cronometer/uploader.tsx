@@ -370,6 +370,7 @@ function NumberInput({
         onChange={(event) =>
           onChange(event.target.value === "" ? null : Number(event.target.value))
         }
+        step="any"
         type="number"
         value={value ?? ""}
       />
