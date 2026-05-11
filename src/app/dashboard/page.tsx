@@ -140,6 +140,12 @@ export default async function DashboardPage({
           <div className="flex flex-wrap gap-3">
             <Link
               className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-800 hover:bg-white"
+              href="/charts"
+            >
+              Charts
+            </Link>
+            <Link
+              className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-800 hover:bg-white"
               href="/cronometer"
             >
               Cronometer upload
