@@ -27,6 +27,8 @@ export function DailyOutputsPanel({
   symptomDefinitions: SymptomDefinition[];
   symptomEntry: SymptomEntry | null;
 }) {
+  const hasSavedSymptoms = Boolean(symptomEntry);
+  const [isLocked, setIsLocked] = useState(hasSavedSymptoms);
   const symptomMeta = parseSymptomMeta(symptomEntry?.notes ?? null);
   const scores = Object.fromEntries(
     symptomDefinitions
@@ -41,13 +43,35 @@ export function DailyOutputsPanel({
   return (
     <section className="rounded-md border border-slate-200 bg-white p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="text-lg font-medium text-slate-950">Daily symptoms</h2>
-        <SymptomManager
-          selectedDate={selectedDate}
-          symptomDefinitions={symptomDefinitions}
-        />
+        <div>
+          <h2 className="text-lg font-medium text-slate-950">Daily symptoms</h2>
+          {hasSavedSymptoms ? (
+            <p className="mt-1 text-sm text-slate-500">
+              {isLocked ? "Saved. Unlock to make changes." : "Editing saved symptoms."}
+            </p>
+          ) : null}
+        </div>
+        <div className="flex items-center gap-2">
+          {isLocked ? (
+            <button
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50"
+              onClick={() => setIsLocked(false)}
+              type="button"
+            >
+              Edit
+            </button>
+          ) : null}
+          <SymptomManager
+            selectedDate={selectedDate}
+            symptomDefinitions={symptomDefinitions}
+          />
+        </div>
       </div>
-      <form action={saveDailyOutputs} className="mt-4 space-y-4">
+      <form
+        action={saveDailyOutputs}
+        className="mt-4 space-y-4"
+        onSubmit={() => setIsLocked(true)}
+      >
         <input name="journal_date" type="hidden" value={selectedDate} />
         {scoreEntries.map(([key, value]) => (
           <SymptomSlider
@@ -57,6 +81,7 @@ export function DailyOutputsPanel({
               symptomDefinitions.find((definition) => definition.key === key)
                 ?.name ?? formatSymptomLabel(key)
             }
+            disabled={isLocked}
             name={`symptom_score_${key}`}
             selectedDate={selectedDate}
             symptomKey={key}
@@ -65,17 +90,19 @@ export function DailyOutputsPanel({
         <label className="block">
           <span className="text-sm font-medium text-slate-800">Notes</span>
           <textarea
-            className="mt-1 min-h-24 w-full rounded-md border border-slate-300 px-3 py-2 text-slate-950 outline-none focus:border-teal-700"
+            className="mt-1 min-h-24 w-full rounded-md border border-slate-300 px-3 py-2 text-slate-950 outline-none focus:border-teal-700 disabled:bg-slate-50 disabled:text-slate-500"
             defaultValue={symptomMeta.text}
+            disabled={isLocked}
             name="symptom_notes"
           />
         </label>
         <div className="flex justify-end">
           <button
-            className="rounded-md bg-teal-700 px-4 py-2 font-medium text-white hover:bg-teal-800"
+            className="rounded-md bg-teal-700 px-4 py-2 font-medium text-white hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+            disabled={isLocked}
             type="submit"
           >
-            Save symptoms
+            {hasSavedSymptoms ? "Save changes" : "Save symptoms"}
           </button>
         </div>
       </form>
@@ -85,12 +112,14 @@ export function DailyOutputsPanel({
 
 function SymptomSlider({
   defaultValue,
+  disabled,
   label,
   name,
   selectedDate,
   symptomKey,
 }: {
   defaultValue: number;
+  disabled: boolean;
   label: string;
   name: string;
   selectedDate: string;
@@ -107,13 +136,16 @@ function SymptomSlider({
           <span className="text-xs text-slate-500">1</span>
           <div className="relative flex-1 pt-7">
             <span
-              className="absolute top-0 -translate-x-1/2 rounded-md bg-teal-700 px-2 py-0.5 text-xs font-semibold text-white shadow-sm"
+              className={`absolute top-0 -translate-x-1/2 rounded-md px-2 py-0.5 text-xs font-semibold text-white shadow-sm ${
+                disabled ? "bg-slate-500" : "bg-teal-700"
+              }`}
               style={{ left: `${scorePosition}%` }}
             >
               {value}
             </span>
             <input
-              className="w-full accent-teal-700"
+              className="w-full accent-teal-700 disabled:cursor-not-allowed disabled:opacity-70"
+              disabled={disabled}
               max="10"
               min="1"
               name={name}
@@ -130,7 +162,8 @@ function SymptomSlider({
         <input name="symptom_key" type="hidden" value={symptomKey} />
         <button
           aria-label={`Remove ${label}`}
-          className="mb-0.5 flex h-7 w-7 items-center justify-center rounded-md border border-red-200 text-base font-medium text-red-700 hover:bg-red-50"
+          className="mb-0.5 flex h-7 w-7 items-center justify-center rounded-md border border-red-200 text-base font-medium text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-300"
+          disabled={disabled}
           type="submit"
         >
           ×

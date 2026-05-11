@@ -292,6 +292,7 @@ export default async function DashboardPage({
 
         <section className="pb-10">
           <DailyOutputsPanel
+            key={selectedDate}
             selectedDate={selectedDate}
             symptomDefinitions={activeSymptomDefinitions}
             symptomEntry={((symptoms.data ?? []) as SymptomEntry[])[0] ?? null}
