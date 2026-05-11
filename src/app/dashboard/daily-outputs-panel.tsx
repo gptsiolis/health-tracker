@@ -97,27 +97,31 @@ function SymptomSlider({
   symptomKey: string;
 }) {
   const [value, setValue] = useState(defaultValue);
+  const scorePosition = Math.min(95, Math.max(5, ((value - 1) / 9) * 100));
 
   return (
     <div className="flex items-end gap-3">
       <label className="block flex-1">
-        <span className="flex items-center justify-between gap-3 text-sm font-medium text-slate-800">
-          <span>{label}</span>
-          <span className="rounded-md bg-slate-100 px-2 py-0.5 text-sm font-semibold text-slate-900">
-            {value}
-          </span>
-        </span>
-        <div className="mt-1 flex items-center gap-3">
+        <span className="text-sm font-medium text-slate-800">{label}</span>
+        <div className="mt-2 flex items-end gap-3">
           <span className="text-xs text-slate-500">1</span>
-          <input
-            className="w-full accent-teal-700"
-            max="10"
-            min="1"
-            name={name}
-            onChange={(event) => setValue(Number(event.target.value))}
-            type="range"
-            value={value}
-          />
+          <div className="relative flex-1 pt-7">
+            <span
+              className="absolute top-0 -translate-x-1/2 rounded-md bg-teal-700 px-2 py-0.5 text-xs font-semibold text-white shadow-sm"
+              style={{ left: `${scorePosition}%` }}
+            >
+              {value}
+            </span>
+            <input
+              className="w-full accent-teal-700"
+              max="10"
+              min="1"
+              name={name}
+              onChange={(event) => setValue(Number(event.target.value))}
+              type="range"
+              value={value}
+            />
+          </div>
           <span className="text-xs text-slate-500">10</span>
         </div>
       </label>
