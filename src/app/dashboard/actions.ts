@@ -463,6 +463,52 @@ export async function addSymptomDefinition(formData: FormData) {
   redirect(`/dashboard?date=${journalDate}&message=Symptom added.`);
 }
 
+export async function deleteSymptomDefinition(formData: FormData) {
+  const { supabase, userId } = await getUserId();
+  const journalDate = selectedDate(formData);
+  const key = requiredText(formData.get("symptom_key"));
+
+  if (!key) {
+    redirect(`/dashboard?date=${journalDate}&message=Invalid symptom.`);
+  }
+
+  const { data } = await supabase
+    .from("symptoms")
+    .select("scores, notes")
+    .eq("date", journalDate)
+    .maybeSingle();
+
+  const scores: Record<string, number> = {
+    ...((data?.scores as Record<string, number> | null) ?? defaultSymptomScores()),
+  };
+  delete scores[key];
+
+  const { error } = await supabase.from("symptoms").upsert({
+    user_id: userId,
+    date: journalDate,
+    scores,
+    notes: data?.notes ?? null,
+  });
+
+  if (error) {
+    redirect(
+      `/dashboard?date=${journalDate}&message=${encodeURIComponent(error.message)}`,
+    );
+  }
+
+  revalidatePath("/dashboard");
+  redirect(`/dashboard?date=${journalDate}&message=Symptom removed.`);
+}
+
+function defaultSymptomScores() {
+  return {
+    fatigue: 5,
+    pain: 5,
+    brain_fog: 5,
+    mood: 5,
+  };
+}
+
 function symptomKey(name: string) {
   return name
     .trim()

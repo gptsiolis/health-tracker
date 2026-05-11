@@ -4,6 +4,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import {
   addSymptomDefinition,
   deleteEntry,
+  deleteSymptomDefinition,
   saveDailyJournalNote,
   saveDailyOutputs,
 } from "./actions";
@@ -12,6 +13,7 @@ import {
   type JournalEntry,
   type Variable,
 } from "./variable-journal";
+import { DatePickerButton } from "./date-picker";
 
 type DashboardPageProps = {
   searchParams: Promise<{
@@ -208,8 +210,8 @@ export default async function DashboardPage({
           </div>
         </header>
 
-        <section className="flex flex-col gap-3 border-b border-slate-200 py-6 sm:flex-row sm:items-end sm:justify-between">
-          <div className="flex items-center gap-4">
+        <section className="border-b border-slate-200 py-6">
+          <div className="flex items-center justify-center gap-4">
             <Link
               aria-label="Previous day"
               className="flex h-10 w-10 items-center justify-center rounded-md border border-slate-300 text-xl text-slate-700 hover:bg-white"
@@ -230,25 +232,8 @@ export default async function DashboardPage({
             >
               ›
             </Link>
+            <DatePickerButton selectedDate={selectedDate} />
           </div>
-
-          <form className="flex items-end gap-3" method="get">
-            <label className="block">
-              <span className="text-sm font-medium text-slate-800">Change date</span>
-              <input
-                className="mt-1 rounded-md border border-slate-300 px-3 py-2 text-slate-950 outline-none focus:border-teal-700"
-                defaultValue={selectedDate}
-                name="date"
-                type="date"
-              />
-            </label>
-            <button
-              className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-800 hover:bg-white"
-              type="submit"
-            >
-              Go
-            </button>
-          </form>
         </section>
 
         {message ? (
@@ -373,12 +358,7 @@ function DailyOutputsPanel({
   symptoms: SymptomEntry[];
 }) {
   const current = symptoms[0];
-  const scores = current?.scores ?? {
-    fatigue: 5,
-    pain: 5,
-    brain_fog: 5,
-    mood: 5,
-  };
+  const scores = current?.scores ?? defaultSymptomScores();
   const scoreEntries = Object.entries(scores);
 
   return (
@@ -404,12 +384,25 @@ function DailyOutputsPanel({
       <form action={saveDailyOutputs} className="mt-4 space-y-4">
         <input name="journal_date" type="hidden" value={selectedDate} />
         {scoreEntries.map(([key, value]) => (
-          <OutputSlider
-            defaultValue={value}
-            key={key}
-            label={formatSymptomLabel(key)}
-            name={`symptom_score_${key}`}
-          />
+          <div className="flex items-end gap-3" key={key}>
+            <div className="flex-1">
+              <OutputSlider
+                defaultValue={value}
+                label={formatSymptomLabel(key)}
+                name={`symptom_score_${key}`}
+              />
+            </div>
+            <form action={deleteSymptomDefinition}>
+              <input name="journal_date" type="hidden" value={selectedDate} />
+              <input name="symptom_key" type="hidden" value={key} />
+              <button
+                className="mb-0.5 rounded-md border border-red-200 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50"
+                type="submit"
+              >
+                Delete
+              </button>
+            </form>
+          </div>
         ))}
         <label className="block">
           <span className="text-sm font-medium text-slate-800">Notes</span>
@@ -430,6 +423,15 @@ function DailyOutputsPanel({
       </form>
     </section>
   );
+}
+
+function defaultSymptomScores() {
+  return {
+    fatigue: 5,
+    pain: 5,
+    brain_fog: 5,
+    mood: 5,
+  };
 }
 
 function formatSymptomLabel(value: string) {
