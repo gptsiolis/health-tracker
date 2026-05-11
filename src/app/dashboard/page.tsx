@@ -53,6 +53,16 @@ type FoodEntry = {
   source: string;
 };
 
+type SleepEntry = {
+  id: string;
+  hours: number | null;
+  bedtime: string | null;
+  wake_time: string | null;
+  rhr: number | null;
+  hrv: number | null;
+  sleep_score: number | null;
+};
+
 export default async function DashboardPage({
   searchParams,
 }: DashboardPageProps) {
@@ -69,7 +79,8 @@ export default async function DashboardPage({
     redirect("/login");
   }
 
-  const [symptoms, supplements, exercise, locations, foods] = await Promise.all([
+  const [symptoms, supplements, exercise, locations, foods, sleep] =
+    await Promise.all([
     supabase
       .from("symptoms")
       .select("id, date, scores, notes")
@@ -104,6 +115,13 @@ export default async function DashboardPage({
       .lt("eaten_at", nextDate)
       .order("eaten_at", { ascending: false })
       .limit(7),
+    supabase
+      .from("sleep")
+      .select("id, hours, bedtime, wake_time, rhr, hrv, sleep_score")
+      .gte("wake_time", selectedDate)
+      .lt("wake_time", nextDate)
+      .order("wake_time", { ascending: false })
+      .limit(7),
   ]);
 
   return (
@@ -125,6 +143,12 @@ export default async function DashboardPage({
               href="/cronometer"
             >
               Cronometer upload
+            </Link>
+            <Link
+              className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-800 hover:bg-white"
+              href="/whoop"
+            >
+              Whoop import
             </Link>
             <form action="/logout" method="post">
               <button
@@ -300,6 +324,10 @@ export default async function DashboardPage({
             <FoodList entries={(foods.data ?? []) as FoodEntry[]} />
           </EntryPanel>
 
+          <EntryPanel title="Sleep">
+            <SleepList entries={(sleep.data ?? []) as SleepEntry[]} />
+          </EntryPanel>
+
           <EntryPanel title="Recent symptoms">
             <SymptomList entries={(symptoms.data ?? []) as SymptomEntry[]} />
           </EntryPanel>
@@ -325,6 +353,7 @@ export default async function DashboardPage({
               exercise={(exercise.data ?? []) as ExerciseEntry[]}
               foods={(foods.data ?? []) as FoodEntry[]}
               locations={(locations.data ?? []) as LocationEntry[]}
+              sleep={(sleep.data ?? []) as SleepEntry[]}
               supplements={(supplements.data ?? []) as SupplementEntry[]}
               symptoms={(symptoms.data ?? []) as SymptomEntry[]}
             />
@@ -457,6 +486,31 @@ function FoodList({ entries }: { entries: FoodEntry[] }) {
   );
 }
 
+function SleepList({ entries }: { entries: SleepEntry[] }) {
+  if (entries.length === 0) {
+    return <EmptyList />;
+  }
+
+  return (
+    <ul className="space-y-3">
+      {entries.map((entry) => (
+        <li className="border-b border-slate-100 pb-3 last:border-0" key={entry.id}>
+          <p className="font-medium text-slate-950">
+            {entry.hours ?? "No"} hours asleep
+          </p>
+          <p className="mt-1 text-sm text-slate-600">
+            Score {entry.sleep_score ?? "not set"}, RHR {entry.rhr ?? "not set"},
+            HRV {entry.hrv ?? "not set"}
+          </p>
+          <p className="mt-1 text-xs text-slate-500">
+            {formatDateTime(entry.bedtime)} to {formatDateTime(entry.wake_time)}
+          </p>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function SymptomList({ entries }: { entries: SymptomEntry[] }) {
   if (entries.length === 0) {
     return <EmptyList />;
@@ -551,12 +605,14 @@ function Timeline({
   exercise,
   foods,
   locations,
+  sleep,
   supplements,
   symptoms,
 }: {
   exercise: ExerciseEntry[];
   foods: FoodEntry[];
   locations: LocationEntry[];
+  sleep: SleepEntry[];
   supplements: SupplementEntry[];
   symptoms: SymptomEntry[];
 }) {
@@ -591,6 +647,12 @@ function Timeline({
       time: timeFromDateTime(entry.started_at),
       title: entry.label,
       detail: entry.ended_at ? `Until ${timeFromDateTime(entry.ended_at)}` : "Location",
+    })),
+    ...sleep.map((entry) => ({
+      id: `sleep-${entry.id}`,
+      time: timeFromDateTime(entry.wake_time ?? ""),
+      title: "Sleep",
+      detail: `${entry.hours ?? "No"} hours, score ${entry.sleep_score ?? "not set"}, RHR ${entry.rhr ?? "not set"}, HRV ${entry.hrv ?? "not set"}`,
     })),
   ].sort((first, second) => {
     if (!first.time && !second.time) return 0;
@@ -662,7 +724,11 @@ function timeFromDateTime(value: string) {
   }).format(date);
 }
 
-function formatDateTime(value: string) {
+function formatDateTime(value: string | null) {
+  if (!value) {
+    return "Not set";
+  }
+
   const date = new Date(value);
 
   if (Number.isNaN(date.getTime())) {
