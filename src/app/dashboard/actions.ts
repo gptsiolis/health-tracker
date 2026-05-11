@@ -39,6 +39,16 @@ function timestampForDate(date: string, timeValue: FormDataEntryValue | null) {
   return `${date}T${time}`;
 }
 
+function requiredText(value: FormDataEntryValue | null) {
+  const text = String(value ?? "").trim();
+
+  if (!text) {
+    return null;
+  }
+
+  return text;
+}
+
 export async function saveDailyEntry(formData: FormData) {
   const { supabase, userId } = await getUserId();
   const journalDate = selectedDate(formData);
@@ -197,4 +207,177 @@ export async function deleteEntry(formData: FormData) {
 
   revalidatePath("/dashboard");
   redirect(`/dashboard?date=${journalDate}&message=Entry deleted.`);
+}
+
+export async function createVariable(formData: FormData) {
+  const { supabase, userId } = await getUserId();
+  const journalDate = selectedDate(formData);
+  const name = requiredText(formData.get("name"));
+  const bucket = requiredText(formData.get("bucket"));
+  const defaultTime = optionalText(formData.get("default_time"));
+  const allowedBuckets = [
+    "symptoms",
+    "supplements",
+    "food",
+    "exercise",
+    "location",
+    "sleep",
+    "notes",
+  ];
+
+  if (!name || !bucket || !allowedBuckets.includes(bucket)) {
+    redirect(`/dashboard?date=${journalDate}&message=Variable needs a name and bucket.`);
+  }
+
+  const { error } = await supabase.from("variables").insert({
+    user_id: userId,
+    name,
+    bucket,
+    default_unit: optionalText(formData.get("default_unit")),
+    default_amount: optionalNumber(formData.get("default_amount")),
+    default_time: defaultTime,
+  });
+
+  if (error) {
+    redirect(
+      `/dashboard?date=${journalDate}&message=${encodeURIComponent(error.message)}`,
+    );
+  }
+
+  revalidatePath("/dashboard");
+  redirect(`/dashboard?date=${journalDate}&message=Variable created.`);
+}
+
+export async function logVariableEntry(formData: FormData) {
+  const { supabase, userId } = await getUserId();
+  const journalDate = selectedDate(formData);
+  const variableId = requiredText(formData.get("variable_id"));
+  const bucket = requiredText(formData.get("bucket"));
+  const timeOfDay = optionalText(formData.get("time_of_day"));
+  const notes = optionalText(formData.get("notes"));
+
+  if (!variableId || !bucket) {
+    redirect(`/dashboard?date=${journalDate}&message=Choose a variable first.`);
+  }
+
+  const data = dataForBucket(bucket, formData);
+
+  const { error } = await supabase.from("journal_entries").insert({
+    user_id: userId,
+    variable_id: variableId,
+    bucket,
+    entry_date: journalDate,
+    time_of_day: timeOfDay,
+    data,
+    notes,
+  });
+
+  if (error) {
+    redirect(
+      `/dashboard?date=${journalDate}&message=${encodeURIComponent(error.message)}`,
+    );
+  }
+
+  await updateVariableDefaults({
+    bucket,
+    formData,
+    supabase,
+    timeOfDay,
+    variableId,
+  });
+
+  revalidatePath("/dashboard");
+  redirect(`/dashboard?date=${journalDate}&message=Entry logged.`);
+}
+
+export async function deleteJournalEntry(formData: FormData) {
+  const { supabase } = await getUserId();
+  const journalDate = selectedDate(formData);
+  const id = requiredText(formData.get("id"));
+
+  if (!id) {
+    redirect(`/dashboard?date=${journalDate}&message=Invalid delete request.`);
+  }
+
+  const { error } = await supabase.from("journal_entries").delete().eq("id", id);
+
+  if (error) {
+    redirect(
+      `/dashboard?date=${journalDate}&message=${encodeURIComponent(error.message)}`,
+    );
+  }
+
+  revalidatePath("/dashboard");
+  redirect(`/dashboard?date=${journalDate}&message=Entry deleted.`);
+}
+
+function dataForBucket(bucket: string, formData: FormData) {
+  if (bucket === "symptoms") {
+    return { score: optionalNumber(formData.get("score")) };
+  }
+
+  if (bucket === "supplements") {
+    return {
+      amount: optionalNumber(formData.get("amount")),
+      unit: optionalText(formData.get("unit")),
+    };
+  }
+
+  if (bucket === "food") {
+    return {
+      calories: optionalNumber(formData.get("calories")),
+      protein: optionalNumber(formData.get("protein")),
+      carbs: optionalNumber(formData.get("carbs")),
+      fat: optionalNumber(formData.get("fat")),
+    };
+  }
+
+  if (bucket === "exercise") {
+    return {
+      duration_min: optionalNumber(formData.get("duration_min")),
+      intensity: optionalNumber(formData.get("intensity")),
+    };
+  }
+
+  if (bucket === "location") {
+    return {
+      end_time: optionalText(formData.get("end_time")),
+    };
+  }
+
+  if (bucket === "sleep") {
+    return {
+      hours: optionalNumber(formData.get("hours")),
+      score: optionalNumber(formData.get("score")),
+      rhr: optionalNumber(formData.get("rhr")),
+      hrv: optionalNumber(formData.get("hrv")),
+    };
+  }
+
+  return {};
+}
+
+async function updateVariableDefaults({
+  bucket,
+  formData,
+  supabase,
+  timeOfDay,
+  variableId,
+}: {
+  bucket: string;
+  formData: FormData;
+  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>;
+  timeOfDay: string | null;
+  variableId: string;
+}) {
+  const defaults: Record<string, number | string | null> = {
+    default_time: timeOfDay,
+  };
+
+  if (bucket === "supplements") {
+    defaults.default_amount = optionalNumber(formData.get("amount"));
+    defaults.default_unit = optionalText(formData.get("unit"));
+  }
+
+  await supabase.from("variables").update(defaults).eq("id", variableId);
 }

@@ -1,7 +1,12 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { deleteEntry, saveDailyEntry, saveManualFood } from "./actions";
+import { deleteEntry } from "./actions";
+import {
+  VariableJournal,
+  type JournalEntry,
+  type Variable,
+} from "./variable-journal";
 
 type DashboardPageProps = {
   searchParams: Promise<{
@@ -79,7 +84,16 @@ export default async function DashboardPage({
     redirect("/login");
   }
 
-  const [symptoms, supplements, exercise, locations, foods, sleep] =
+  const [
+    symptoms,
+    supplements,
+    exercise,
+    locations,
+    foods,
+    sleep,
+    variables,
+    journalEntries,
+  ] =
     await Promise.all([
     supabase
       .from("symptoms")
@@ -122,6 +136,17 @@ export default async function DashboardPage({
       .lt("wake_time", nextDate)
       .order("wake_time", { ascending: false })
       .limit(7),
+    supabase
+      .from("variables")
+      .select("id, name, bucket, default_unit, default_amount, default_time")
+      .is("archived_at", null)
+      .order("name", { ascending: true }),
+    supabase
+      .from("journal_entries")
+      .select("id, variable_id, bucket, entry_date, time_of_day, data, notes, variables(name)")
+      .eq("entry_date", selectedDate)
+      .order("time_of_day", { ascending: true, nullsFirst: false })
+      .order("created_at", { ascending: true }),
   ]);
 
   return (
@@ -200,130 +225,11 @@ export default async function DashboardPage({
           </p>
         ) : null}
 
-        <form action={saveDailyEntry} className="py-8">
-          <input name="journal_date" type="hidden" value={selectedDate} />
-          <section className="grid gap-6 lg:grid-cols-2">
-            <FormPanel title="Symptoms">
-              <div className="space-y-4">
-                <Slider label="Fatigue" name="fatigue" />
-                <Slider label="Pain" name="pain" />
-                <Slider label="Brain fog" name="brain_fog" />
-                <Slider label="Mood" name="mood" />
-                <TextArea label="Notes" name="symptom_notes" />
-              </div>
-            </FormPanel>
-
-            <FormPanel title="Supplements">
-              <div className="space-y-4">
-                <TextInput label="Name" name="supplement_name" />
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <TextInput
-                    label="Dose"
-                    name="supplement_dose"
-                    type="number"
-                    step="0.01"
-                  />
-                  <TextInput label="Unit" name="supplement_unit" placeholder="mg" />
-                </div>
-                <TextInput
-                  label="Time"
-                  name="supplement_time"
-                  type="time"
-                />
-                <TextArea label="Notes" name="supplement_notes" />
-              </div>
-            </FormPanel>
-
-            <FormPanel title="Exercise">
-              <div className="space-y-4">
-                <TextInput
-                  label="Type"
-                  name="exercise_type"
-                  placeholder="Walk"
-                />
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <TextInput
-                    label="Duration"
-                    name="exercise_duration_min"
-                    type="number"
-                    placeholder="Minutes"
-                  />
-                  <TextInput
-                    label="Intensity"
-                    name="exercise_intensity"
-                    type="number"
-                    min="1"
-                    max="10"
-                  />
-                </div>
-                <TextInput
-                  label="Time"
-                  name="exercise_time"
-                  type="time"
-                />
-                <TextArea label="Notes" name="exercise_notes" />
-              </div>
-            </FormPanel>
-
-            <FormPanel title="Location">
-              <div className="space-y-4">
-                <TextInput
-                  label="Label"
-                  name="location_label"
-                  placeholder="Home"
-                />
-                <TextInput
-                  label="Start time"
-                  name="location_start_time"
-                  type="time"
-                />
-                <TextInput
-                  label="End time"
-                  name="location_end_time"
-                  type="time"
-                />
-              </div>
-            </FormPanel>
-          </section>
-
-          <div className="mt-6 flex justify-end">
-            <button
-              className="rounded-md bg-teal-700 px-5 py-2.5 font-medium text-white hover:bg-teal-800"
-              type="submit"
-            >
-              Save daily entry
-            </button>
-          </div>
-        </form>
-
-        <section className="pb-10">
-          <FormPanel title="Food">
-            <form action={saveManualFood} className="space-y-4">
-              <input name="journal_date" type="hidden" value={selectedDate} />
-              <TextInput
-                label="Time"
-                name="food_time"
-                type="time"
-              />
-              <div className="grid gap-4 sm:grid-cols-4">
-                <TextInput label="Calories" name="calories" type="number" />
-                <TextInput label="Protein" name="protein" type="number" step="0.1" />
-                <TextInput label="Carbs" name="carbs" type="number" step="0.1" />
-                <TextInput label="Fat" name="fat" type="number" step="0.1" />
-              </div>
-              <TextArea label="Foods list" name="foods_list" />
-              <TextArea label="Micros JSON" name="micros" />
-              <div className="flex justify-end">
-                <button
-                  className="rounded-md bg-teal-700 px-5 py-2.5 font-medium text-white hover:bg-teal-800"
-                  type="submit"
-                >
-                  Save food
-                </button>
-              </div>
-            </form>
-          </FormPanel>
-        </section>
+        <VariableJournal
+          entries={(journalEntries.data ?? []) as JournalEntry[]}
+          selectedDate={selectedDate}
+          variables={(variables.data ?? []) as Variable[]}
+        />
 
         <section className="grid gap-6 pb-10 lg:grid-cols-2">
           <EntryPanel title="Recent foods">
@@ -386,21 +292,6 @@ export default async function DashboardPage({
   );
 }
 
-function FormPanel({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="rounded-md border border-slate-200 bg-white p-5">
-      <h2 className="text-lg font-medium text-slate-950">{title}</h2>
-      <div className="mt-5">{children}</div>
-    </section>
-  );
-}
-
 function EntryPanel({
   title,
   children,
@@ -415,64 +306,6 @@ function EntryPanel({
         {children}
       </div>
     </section>
-  );
-}
-
-function TextInput({
-  label,
-  name,
-  type = "text",
-  required = false,
-  ...props
-}: {
-  label: string;
-  name: string;
-  type?: string;
-  required?: boolean;
-} & React.InputHTMLAttributes<HTMLInputElement>) {
-  return (
-    <label className="block">
-      <span className="text-sm font-medium text-slate-800">{label}</span>
-      <input
-        className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-slate-950 outline-none focus:border-teal-700"
-        name={name}
-        type={type}
-        required={required}
-        {...props}
-      />
-    </label>
-  );
-}
-
-function TextArea({ label, name }: { label: string; name: string }) {
-  return (
-    <label className="block">
-      <span className="text-sm font-medium text-slate-800">{label}</span>
-      <textarea
-        className="mt-1 min-h-24 w-full rounded-md border border-slate-300 px-3 py-2 text-slate-950 outline-none focus:border-teal-700"
-        name={name}
-      />
-    </label>
-  );
-}
-
-function Slider({ label, name }: { label: string; name: string }) {
-  return (
-    <label className="block">
-      <span className="text-sm font-medium text-slate-800">{label}</span>
-      <div className="mt-1 flex items-center gap-3">
-        <span className="text-xs text-slate-500">1</span>
-        <input
-          className="w-full accent-teal-700"
-          defaultValue="5"
-          max="10"
-          min="1"
-          name={name}
-          type="range"
-        />
-        <span className="text-xs text-slate-500">10</span>
-      </div>
-    </label>
   );
 }
 
