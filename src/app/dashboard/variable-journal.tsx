@@ -18,6 +18,7 @@ export type Variable = {
   default_unit: string | null;
   default_amount: number | null;
   default_time: string | null;
+  config: VariableConfig;
 };
 
 export type JournalEntry = {
@@ -31,11 +32,20 @@ export type JournalEntry = {
   variables:
     | {
         name: string;
+        config: VariableConfig | null;
       }
     | {
         name: string;
+        config: VariableConfig | null;
       }[]
     | null;
+};
+
+type VariableConfig = {
+  field_type?: "single_number";
+  label?: string;
+  unit?: string;
+  show_time?: boolean;
 };
 
 const bucketLabels: Record<Bucket, string> = {
@@ -54,6 +64,14 @@ const bucketOptions: Bucket[] = [
   "location",
   "sleep",
   "notes",
+];
+
+const sleepMetricOptions = [
+  { label: "RHR", value: "rhr" },
+  { label: "HRV", value: "hrv" },
+  { label: "Sleep hours", value: "sleep_hours" },
+  { label: "Sleep score", value: "sleep_score" },
+  { label: "Other number", value: "other_number" },
 ];
 
 export function VariableJournal({
@@ -221,6 +239,9 @@ function CreateVariableModal({
   onClose: () => void;
   selectedDate: string;
 }) {
+  const [bucket, setBucket] = useState<Bucket>("supplements");
+  const [sleepMetric, setSleepMetric] = useState("rhr");
+
   return (
     <Modal title="Create variable" onClose={onClose}>
       <form action={createVariable} className="space-y-4">
@@ -231,7 +252,9 @@ function CreateVariableModal({
           <select
             className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-slate-950 outline-none focus:border-teal-700"
             name="bucket"
+            onChange={(event) => setBucket(event.target.value as Bucket)}
             required
+            value={bucket}
           >
             {bucketOptions.map((bucket) => (
               <option key={bucket} value={bucket}>
@@ -240,11 +263,36 @@ function CreateVariableModal({
             ))}
           </select>
         </label>
-        <div className="grid gap-4 sm:grid-cols-3">
-          <TextInput label="Default amount" name="default_amount" type="number" />
-          <TextInput label="Default unit" name="default_unit" />
-          <TextInput label="Default time" name="default_time" type="time" />
-        </div>
+        {bucket === "sleep" ? (
+          <>
+            <label className="block">
+              <span className="text-sm font-medium text-slate-800">
+                Sleep metric type
+              </span>
+              <select
+                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-slate-950 outline-none focus:border-teal-700"
+                name="sleep_metric_type"
+                onChange={(event) => setSleepMetric(event.target.value)}
+                value={sleepMetric}
+              >
+                {sleepMetricOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {sleepMetric === "other_number" ? (
+              <TextInput label="Display unit" name="sleep_unit" />
+            ) : null}
+          </>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-3">
+            <TextInput label="Default amount" name="default_amount" type="number" />
+            <TextInput label="Default unit" name="default_unit" />
+            <TextInput label="Default time" name="default_time" type="time" />
+          </div>
+        )}
         <div className="flex justify-end gap-3">
           <button className="rounded-md border border-slate-300 px-4 py-2 text-slate-800" onClick={onClose} type="button">
             Cancel
@@ -273,12 +321,14 @@ function LogVariableModal({
         <input name="journal_date" type="hidden" value={selectedDate} />
         <input name="variable_id" type="hidden" value={variable.id} />
         <input name="bucket" type="hidden" value={variable.bucket} />
-        <TextInput
-          defaultValue={variable.default_time?.slice(0, 5) ?? ""}
-          label="Time"
-          name="time_of_day"
-          type="time"
-        />
+        {shouldShowTime(variable) ? (
+          <TextInput
+            defaultValue={variable.default_time?.slice(0, 5) ?? ""}
+            label="Time"
+            name="time_of_day"
+            type="time"
+          />
+        ) : null}
         <BucketFields variable={variable} />
         <label className="block">
           <span className="text-sm font-medium text-slate-800">Notes</span>
@@ -344,14 +394,7 @@ function BucketFields({ variable }: { variable: Variable }) {
   }
 
   if (variable.bucket === "sleep") {
-    return (
-      <div className="grid gap-4 sm:grid-cols-4">
-        <TextInput label="Hours" name="hours" type="number" />
-        <TextInput label="Score" name="score" type="number" />
-        <TextInput label="RHR" name="rhr" type="number" />
-        <TextInput label="HRV" name="hrv" type="number" />
-      </div>
-    );
+    return <TextInput label={variable.config.label ?? "Value"} name="value" type="number" />;
   }
 
   return null;
@@ -423,6 +466,10 @@ function entrySummary(entry: JournalEntry) {
   }
 
   if (entry.bucket === "sleep") {
+    if ("value" in entry.data) {
+      return formatValueWithUnit(entry.data.value, entryConfig(entry)?.unit);
+    }
+
     return `${entry.data.hours ?? "No"} hours, score ${entry.data.score ?? "not set"}`;
   }
 
@@ -435,4 +482,31 @@ function variableName(entry: JournalEntry) {
   }
 
   return entry.variables?.name;
+}
+
+function entryConfig(entry: JournalEntry) {
+  if (Array.isArray(entry.variables)) {
+    return entry.variables[0]?.config ?? null;
+  }
+
+  return entry.variables?.config ?? null;
+}
+
+function formatValueWithUnit(
+  value: number | string | null | undefined,
+  unit: string | undefined,
+) {
+  if (value === null || value === undefined || value === "") {
+    return "No value";
+  }
+
+  return [value, unit].filter(Boolean).join(" ");
+}
+
+function shouldShowTime(variable: Variable) {
+  if (variable.bucket === "sleep") {
+    return variable.config.show_time === true;
+  }
+
+  return true;
 }

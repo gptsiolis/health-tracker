@@ -153,12 +153,12 @@ export default async function DashboardPage({
       .limit(7),
     supabase
       .from("variables")
-      .select("id, name, bucket, default_unit, default_amount, default_time")
+      .select("id, name, bucket, default_unit, default_amount, default_time, config")
       .is("archived_at", null)
       .order("name", { ascending: true }),
     supabase
       .from("journal_entries")
-      .select("id, variable_id, bucket, entry_date, time_of_day, data, notes, variables(name)")
+      .select("id, variable_id, bucket, entry_date, time_of_day, data, notes, variables(name, config)")
       .eq("entry_date", selectedDate)
       .order("time_of_day", { ascending: true, nullsFirst: false })
       .order("created_at", { ascending: true }),
@@ -176,6 +176,7 @@ export default async function DashboardPage({
   ]);
   let activeSymptomDefinitions = (symptomDefinitions.data ??
     []) as SymptomDefinition[];
+  let activeVariables = (variables.data ?? []) as Variable[];
 
   if (activeSymptomDefinitions.length === 0) {
     const { data: seededSymptoms } = await supabase
@@ -192,6 +193,23 @@ export default async function DashboardPage({
       .order("sort_order", { ascending: true });
 
     activeSymptomDefinitions = (seededSymptoms ?? []) as SymptomDefinition[];
+  }
+
+  if (!activeVariables.some((variable) => variable.bucket === "sleep")) {
+    const { data: seededSleepVariables } = await supabase
+      .from("variables")
+      .insert(
+        defaultSleepVariables().map((variable) => ({
+          user_id: user.id,
+          ...variable,
+        })),
+      )
+      .select("id, name, bucket, default_unit, default_amount, default_time, config");
+
+    activeVariables = [
+      ...activeVariables,
+      ...((seededSleepVariables ?? []) as Variable[]),
+    ].sort((first, second) => first.name.localeCompare(second.name));
   }
 
   return (
@@ -260,7 +278,7 @@ export default async function DashboardPage({
         <VariableJournal
           entries={(journalEntries.data ?? []) as JournalEntry[]}
           selectedDate={selectedDate}
-          variables={(variables.data ?? []) as Variable[]}
+          variables={activeVariables}
         />
 
         <section className="pb-8">
@@ -333,6 +351,31 @@ function defaultSymptomDefinitions(): SymptomDefinition[] {
     { id: "default-brain-fog", key: "brain_fog", name: "Brain fog" },
     { id: "default-mood", key: "mood", name: "Mood" },
   ];
+}
+
+function defaultSleepVariables() {
+  return [
+    sleepVariable("RHR", "RHR", "bpm"),
+    sleepVariable("HRV", "HRV", "ms"),
+    sleepVariable("Sleep hours", "Sleep hours", "hours"),
+    sleepVariable("Sleep score", "Sleep score"),
+  ];
+}
+
+function sleepVariable(name: string, label: string, unit?: string) {
+  return {
+    name,
+    bucket: "sleep",
+    default_unit: null,
+    default_amount: null,
+    default_time: null,
+    config: {
+      field_type: "single_number",
+      label,
+      unit,
+      show_time: false,
+    },
+  };
 }
 
 function EntryPanel({

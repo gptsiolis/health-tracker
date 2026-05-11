@@ -234,7 +234,8 @@ export async function createVariable(formData: FormData) {
     bucket,
     default_unit: optionalText(formData.get("default_unit")),
     default_amount: optionalNumber(formData.get("default_amount")),
-    default_time: defaultTime,
+    default_time: bucket === "sleep" ? null : defaultTime,
+    config: configForVariable(bucket, formData),
   });
 
   if (error) {
@@ -401,10 +402,7 @@ function dataForBucket(bucket: string, formData: FormData) {
 
   if (bucket === "sleep") {
     return {
-      hours: optionalNumber(formData.get("hours")),
-      score: optionalNumber(formData.get("score")),
-      rhr: optionalNumber(formData.get("rhr")),
-      hrv: optionalNumber(formData.get("hrv")),
+      value: optionalNumber(formData.get("value")),
     };
   }
 
@@ -433,7 +431,36 @@ async function updateVariableDefaults({
     defaults.default_unit = optionalText(formData.get("unit"));
   }
 
+  if (bucket === "sleep") {
+    return;
+  }
+
   await supabase.from("variables").update(defaults).eq("id", variableId);
+}
+
+function configForVariable(bucket: string, formData: FormData) {
+  if (bucket !== "sleep") {
+    return {};
+  }
+
+  const metricType = String(formData.get("sleep_metric_type") ?? "other_number");
+  const configByMetric: Record<string, { label: string; unit?: string }> = {
+    rhr: { label: "RHR", unit: "bpm" },
+    hrv: { label: "HRV", unit: "ms" },
+    sleep_hours: { label: "Sleep hours", unit: "hours" },
+    sleep_score: { label: "Sleep score" },
+  };
+  const metricConfig = configByMetric[metricType] ?? {
+    label: "Value",
+    unit: optionalText(formData.get("sleep_unit")) ?? undefined,
+  };
+
+  return {
+    field_type: "single_number",
+    label: metricConfig.label,
+    unit: metricConfig.unit,
+    show_time: false,
+  };
 }
 
 export async function addSymptomDefinition(formData: FormData) {
