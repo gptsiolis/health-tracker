@@ -1,12 +1,8 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { SymptomManager } from "./symptom-manager";
+import { DailyOutputsPanel } from "./daily-outputs-panel";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import {
-  deleteSymptomDefinition,
-  saveDailyJournalNote,
-  saveDailyOutputs,
-} from "./actions";
+import { saveDailyJournalNote } from "./actions";
 import {
   VariableJournal,
   type JournalEntry,
@@ -280,7 +276,7 @@ export default async function DashboardPage({
           <DailyOutputsPanel
             selectedDate={selectedDate}
             symptomDefinitions={activeSymptomDefinitions}
-            symptoms={(symptoms.data ?? []) as SymptomEntry[]}
+            symptomEntry={((symptoms.data ?? []) as SymptomEntry[])[0] ?? null}
           />
         </section>
 
@@ -330,81 +326,6 @@ function DailyJournalPanel({
   );
 }
 
-function DailyOutputsPanel({
-  selectedDate,
-  symptomDefinitions,
-  symptoms,
-}: {
-  selectedDate: string;
-  symptomDefinitions: SymptomDefinition[];
-  symptoms: SymptomEntry[];
-}) {
-  const current = symptoms[0];
-  const symptomMeta = parseSymptomMeta(current?.notes ?? null);
-  const scores = Object.fromEntries(
-    symptomDefinitions
-      .filter((definition) => !symptomMeta.deletedSymptoms.includes(definition.key))
-      .map((definition) => [
-        definition.key,
-        current?.scores[definition.key] ?? 5,
-      ]),
-  );
-  const scoreEntries = Object.entries(scores);
-
-  return (
-    <section className="rounded-md border border-slate-200 bg-white p-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="text-lg font-medium text-slate-950">Daily symptoms</h2>
-        <SymptomManager
-          selectedDate={selectedDate}
-          symptomDefinitions={symptomDefinitions}
-        />
-      </div>
-      <form action={saveDailyOutputs} className="mt-4 space-y-4">
-        <input name="journal_date" type="hidden" value={selectedDate} />
-        {scoreEntries.map(([key, value]) => (
-          <div className="flex items-end gap-3" key={key}>
-            <div className="flex-1">
-              <OutputSlider
-                defaultValue={value}
-            label={symptomDefinitions.find((definition) => definition.key === key)?.name ?? formatSymptomLabel(key)}
-            name={`symptom_score_${key}`}
-          />
-            </div>
-            <form action={deleteSymptomDefinition}>
-              <input name="journal_date" type="hidden" value={selectedDate} />
-              <input name="symptom_key" type="hidden" value={key} />
-              <button
-                aria-label={`Remove ${formatSymptomLabel(key)}`}
-                className="mb-0.5 flex h-7 w-7 items-center justify-center rounded-md border border-red-200 text-base font-medium text-red-700 hover:bg-red-50"
-                type="submit"
-              >
-                ×
-              </button>
-            </form>
-          </div>
-        ))}
-        <label className="block">
-          <span className="text-sm font-medium text-slate-800">Notes</span>
-          <textarea
-            className="mt-1 min-h-24 w-full rounded-md border border-slate-300 px-3 py-2 text-slate-950 outline-none focus:border-teal-700"
-            defaultValue={symptomMeta.text}
-            name="symptom_notes"
-          />
-        </label>
-        <div className="flex justify-end">
-          <button
-            className="rounded-md bg-teal-700 px-4 py-2 font-medium text-white hover:bg-teal-800"
-            type="submit"
-          >
-            Save symptoms
-          </button>
-        </div>
-      </form>
-    </section>
-  );
-}
-
 function defaultSymptomDefinitions(): SymptomDefinition[] {
   return [
     { id: "default-fatigue", key: "fatigue", name: "Fatigue" },
@@ -412,61 +333,6 @@ function defaultSymptomDefinitions(): SymptomDefinition[] {
     { id: "default-brain-fog", key: "brain_fog", name: "Brain fog" },
     { id: "default-mood", key: "mood", name: "Mood" },
   ];
-}
-
-function parseSymptomMeta(notes: string | null) {
-  if (!notes) {
-    return { deletedSymptoms: [] as string[], text: "" };
-  }
-
-  try {
-    const parsed = JSON.parse(notes) as {
-      deletedSymptoms?: string[];
-      text?: string;
-    };
-
-    return {
-      deletedSymptoms: parsed.deletedSymptoms ?? [],
-      text: parsed.text ?? "",
-    };
-  } catch {
-    return { deletedSymptoms: [] as string[], text: notes };
-  }
-}
-
-function formatSymptomLabel(value: string) {
-  return value
-    .split("_")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
-}
-
-function OutputSlider({
-  defaultValue,
-  label,
-  name,
-}: {
-  defaultValue: number;
-  label: string;
-  name: string;
-}) {
-  return (
-    <label className="block">
-      <span className="text-sm font-medium text-slate-800">{label}</span>
-      <div className="mt-1 flex items-center gap-3">
-        <span className="text-xs text-slate-500">1</span>
-        <input
-          className="w-full accent-teal-700"
-          defaultValue={defaultValue}
-          max="10"
-          min="1"
-          name={name}
-          type="range"
-        />
-        <span className="text-xs text-slate-500">10</span>
-      </div>
-    </label>
-  );
 }
 
 function EntryPanel({
