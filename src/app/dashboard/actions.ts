@@ -216,7 +216,6 @@ export async function createVariable(formData: FormData) {
   const bucket = requiredText(formData.get("bucket"));
   const defaultTime = optionalText(formData.get("default_time"));
   const allowedBuckets = [
-    "symptoms",
     "supplements",
     "food",
     "exercise",
@@ -293,12 +292,13 @@ export async function logVariableEntry(formData: FormData) {
 export async function saveDailyOutputs(formData: FormData) {
   const { supabase, userId } = await getUserId();
   const journalDate = selectedDate(formData);
-  const scores = {
-    fatigue: Number(formData.get("fatigue")),
-    pain: Number(formData.get("pain")),
-    brain_fog: Number(formData.get("brain_fog")),
-    mood: Number(formData.get("mood")),
-  };
+  const scores: Record<string, number> = {};
+
+  for (const [key, value] of formData.entries()) {
+    if (key.startsWith("symptom_score_")) {
+      scores[key.replace("symptom_score_", "")] = Number(value);
+    }
+  }
 
   const { error } = await supabase.from("symptoms").upsert({
     user_id: userId,
@@ -360,10 +360,6 @@ export async function deleteJournalEntry(formData: FormData) {
 }
 
 function dataForBucket(bucket: string, formData: FormData) {
-  if (bucket === "symptoms") {
-    return { score: optionalNumber(formData.get("score")) };
-  }
-
   if (bucket === "supplements") {
     return {
       amount: optionalNumber(formData.get("amount")),
@@ -428,4 +424,49 @@ async function updateVariableDefaults({
   }
 
   await supabase.from("variables").update(defaults).eq("id", variableId);
+}
+
+export async function addSymptomDefinition(formData: FormData) {
+  const { supabase, userId } = await getUserId();
+  const journalDate = selectedDate(formData);
+  const name = requiredText(formData.get("symptom_name"));
+
+  if (!name) {
+    redirect(`/dashboard?date=${journalDate}&message=Symptom needs a name.`);
+  }
+
+  const { data } = await supabase
+    .from("symptoms")
+    .select("scores, notes")
+    .eq("date", journalDate)
+    .maybeSingle();
+
+  const scores = {
+    ...((data?.scores as Record<string, number> | null) ?? {}),
+    [symptomKey(name)]: 5,
+  };
+
+  const { error } = await supabase.from("symptoms").upsert({
+    user_id: userId,
+    date: journalDate,
+    scores,
+    notes: data?.notes ?? null,
+  });
+
+  if (error) {
+    redirect(
+      `/dashboard?date=${journalDate}&message=${encodeURIComponent(error.message)}`,
+    );
+  }
+
+  revalidatePath("/dashboard");
+  redirect(`/dashboard?date=${journalDate}&message=Symptom added.`);
+}
+
+function symptomKey(name: string) {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
 }

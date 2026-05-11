@@ -1,7 +1,12 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { deleteEntry, saveDailyJournalNote, saveDailyOutputs } from "./actions";
+import {
+  addSymptomDefinition,
+  deleteEntry,
+  saveDailyJournalNote,
+  saveDailyOutputs,
+} from "./actions";
 import {
   VariableJournal,
   type JournalEntry,
@@ -78,6 +83,7 @@ export default async function DashboardPage({
   const { date, message } = await searchParams;
   const selectedDate = date && isValidDateOnly(date) ? date : todayDate();
   const nextDate = addDays(selectedDate, 1);
+  const previousDate = addDays(selectedDate, -1);
   const selectedDateLabel = formatDateOnly(selectedDate);
   const supabase = await createServerSupabaseClient();
   const {
@@ -203,11 +209,27 @@ export default async function DashboardPage({
         </header>
 
         <section className="flex flex-col gap-3 border-b border-slate-200 py-6 sm:flex-row sm:items-end sm:justify-between">
-          <div>
+          <div className="flex items-center gap-4">
+            <Link
+              aria-label="Previous day"
+              className="flex h-10 w-10 items-center justify-center rounded-md border border-slate-300 text-xl text-slate-700 hover:bg-white"
+              href={`/dashboard?date=${previousDate}`}
+            >
+              ‹
+            </Link>
+            <div>
             <p className="text-sm font-medium text-slate-500">Journal date</p>
             <h2 className="text-2xl font-semibold text-slate-950">
               {selectedDateLabel}
             </h2>
+            </div>
+            <Link
+              aria-label="Next day"
+              className="flex h-10 w-10 items-center justify-center rounded-md border border-slate-300 text-xl text-slate-700 hover:bg-white"
+              href={`/dashboard?date=${nextDate}`}
+            >
+              ›
+            </Link>
           </div>
 
           <form className="flex items-end gap-3" method="get">
@@ -351,32 +373,44 @@ function DailyOutputsPanel({
   symptoms: SymptomEntry[];
 }) {
   const current = symptoms[0];
+  const scores = current?.scores ?? {
+    fatigue: 5,
+    pain: 5,
+    brain_fog: 5,
+    mood: 5,
+  };
+  const scoreEntries = Object.entries(scores);
 
   return (
     <section className="rounded-md border border-slate-200 bg-white p-5">
-      <h2 className="text-lg font-medium text-slate-950">Daily symptoms</h2>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="text-lg font-medium text-slate-950">Daily symptoms</h2>
+        <form action={addSymptomDefinition} className="flex gap-2">
+          <input name="journal_date" type="hidden" value={selectedDate} />
+          <input
+            className="w-40 rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-950 outline-none focus:border-teal-700"
+            name="symptom_name"
+            placeholder="Add symptom"
+          />
+          <button
+            aria-label="Add symptom"
+            className="flex h-10 w-10 items-center justify-center rounded-md bg-teal-700 text-xl font-medium text-white hover:bg-teal-800"
+            type="submit"
+          >
+            +
+          </button>
+        </form>
+      </div>
       <form action={saveDailyOutputs} className="mt-4 space-y-4">
         <input name="journal_date" type="hidden" value={selectedDate} />
-        <OutputSlider
-          defaultValue={current?.scores.fatigue ?? 5}
-          label="Fatigue"
-          name="fatigue"
-        />
-        <OutputSlider
-          defaultValue={current?.scores.pain ?? 5}
-          label="Pain"
-          name="pain"
-        />
-        <OutputSlider
-          defaultValue={current?.scores.brain_fog ?? 5}
-          label="Brain fog"
-          name="brain_fog"
-        />
-        <OutputSlider
-          defaultValue={current?.scores.mood ?? 5}
-          label="Mood"
-          name="mood"
-        />
+        {scoreEntries.map(([key, value]) => (
+          <OutputSlider
+            defaultValue={value}
+            key={key}
+            label={formatSymptomLabel(key)}
+            name={`symptom_score_${key}`}
+          />
+        ))}
         <label className="block">
           <span className="text-sm font-medium text-slate-800">Notes</span>
           <textarea
@@ -396,6 +430,13 @@ function DailyOutputsPanel({
       </form>
     </section>
   );
+}
+
+function formatSymptomLabel(value: string) {
+  return value
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
 }
 
 function OutputSlider({

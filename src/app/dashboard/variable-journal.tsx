@@ -72,7 +72,7 @@ export function VariableJournal({
     const normalizedQuery = query.trim().toLowerCase();
 
     if (!normalizedQuery) {
-      return variables.slice(0, 8);
+      return [];
     }
 
     return variables
@@ -100,30 +100,32 @@ export function VariableJournal({
           </button>
         </div>
 
-        <div className="mt-2 rounded-md border border-slate-200 bg-white shadow-sm">
-          {matches.length > 0 ? (
-            matches.map((variable) => (
-              <button
-                className="flex w-full items-center justify-between border-b border-slate-100 px-4 py-3 text-left last:border-0 hover:bg-slate-50"
-                key={variable.id}
-                onClick={() => {
-                  setSelectedVariable(variable);
-                  setQuery("");
-                }}
-                type="button"
-              >
-                <span className="font-medium text-slate-950">{variable.name}</span>
-                <span className="text-sm text-slate-500">
-                  {bucketLabels[variable.bucket]}
-                </span>
-              </button>
-            ))
-          ) : (
-            <p className="px-4 py-3 text-sm text-slate-500">
-              No variables match. Use + to create one.
-            </p>
-          )}
-        </div>
+        {query.trim() ? (
+          <div className="mt-2 rounded-md border border-slate-200 bg-white shadow-sm">
+            {matches.length > 0 ? (
+              matches.map((variable) => (
+                <button
+                  className="flex w-full items-center justify-between border-b border-slate-100 px-4 py-3 text-left last:border-0 hover:bg-slate-50"
+                  key={variable.id}
+                  onClick={() => {
+                    setSelectedVariable(variable);
+                    setQuery("");
+                  }}
+                  type="button"
+                >
+                  <span className="font-medium text-slate-950">{variable.name}</span>
+                  <span className="text-sm text-slate-500">
+                    {bucketLabels[variable.bucket]}
+                  </span>
+                </button>
+              ))
+            ) : (
+              <p className="px-4 py-3 text-sm text-slate-500">
+                No variables match. Use + to create one.
+              </p>
+            )}
+          </div>
+        ) : null}
       </div>
 
       <div className="mt-8 space-y-5">
