@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { deleteEntry } from "./actions";
+import { deleteEntry, saveDailyJournalNote, saveDailyOutputs } from "./actions";
 import {
   VariableJournal,
   type JournalEntry,
@@ -68,6 +68,10 @@ type SleepEntry = {
   sleep_score: number | null;
 };
 
+type DailyJournalNote = {
+  notes: string;
+};
+
 export default async function DashboardPage({
   searchParams,
 }: DashboardPageProps) {
@@ -93,6 +97,7 @@ export default async function DashboardPage({
     sleep,
     variables,
     journalEntries,
+    dailyJournalNote,
   ] =
     await Promise.all([
     supabase
@@ -147,6 +152,11 @@ export default async function DashboardPage({
       .eq("entry_date", selectedDate)
       .order("time_of_day", { ascending: true, nullsFirst: false })
       .order("created_at", { ascending: true }),
+    supabase
+      .from("daily_journal_notes")
+      .select("notes")
+      .eq("date", selectedDate)
+      .maybeSingle(),
   ]);
 
   return (
@@ -232,6 +242,17 @@ export default async function DashboardPage({
         />
 
         <section className="grid gap-6 pb-10 lg:grid-cols-2">
+          <DailyJournalPanel
+            note={(dailyJournalNote.data as DailyJournalNote | null)?.notes ?? ""}
+            selectedDate={selectedDate}
+          />
+          <DailyOutputsPanel
+            selectedDate={selectedDate}
+            symptoms={(symptoms.data ?? []) as SymptomEntry[]}
+          />
+        </section>
+
+        <section className="grid gap-6 pb-10 lg:grid-cols-2">
           <EntryPanel title="Recent foods">
             <FoodList
               entries={(foods.data ?? []) as FoodEntry[]}
@@ -289,6 +310,119 @@ export default async function DashboardPage({
         </section>
       </div>
     </main>
+  );
+}
+
+function DailyJournalPanel({
+  note,
+  selectedDate,
+}: {
+  note: string;
+  selectedDate: string;
+}) {
+  return (
+    <section className="rounded-md border border-slate-200 bg-white p-5">
+      <h2 className="text-lg font-medium text-slate-950">Daily journal</h2>
+      <form action={saveDailyJournalNote} className="mt-4 space-y-4">
+        <input name="journal_date" type="hidden" value={selectedDate} />
+        <textarea
+          className="min-h-40 w-full rounded-md border border-slate-300 px-3 py-2 text-slate-950 outline-none focus:border-teal-700"
+          defaultValue={note}
+          name="journal_notes"
+        />
+        <div className="flex justify-end">
+          <button
+            className="rounded-md bg-teal-700 px-4 py-2 font-medium text-white hover:bg-teal-800"
+            type="submit"
+          >
+            Save journal
+          </button>
+        </div>
+      </form>
+    </section>
+  );
+}
+
+function DailyOutputsPanel({
+  selectedDate,
+  symptoms,
+}: {
+  selectedDate: string;
+  symptoms: SymptomEntry[];
+}) {
+  const current = symptoms[0];
+
+  return (
+    <section className="rounded-md border border-slate-200 bg-white p-5">
+      <h2 className="text-lg font-medium text-slate-950">Daily symptoms</h2>
+      <form action={saveDailyOutputs} className="mt-4 space-y-4">
+        <input name="journal_date" type="hidden" value={selectedDate} />
+        <OutputSlider
+          defaultValue={current?.scores.fatigue ?? 5}
+          label="Fatigue"
+          name="fatigue"
+        />
+        <OutputSlider
+          defaultValue={current?.scores.pain ?? 5}
+          label="Pain"
+          name="pain"
+        />
+        <OutputSlider
+          defaultValue={current?.scores.brain_fog ?? 5}
+          label="Brain fog"
+          name="brain_fog"
+        />
+        <OutputSlider
+          defaultValue={current?.scores.mood ?? 5}
+          label="Mood"
+          name="mood"
+        />
+        <label className="block">
+          <span className="text-sm font-medium text-slate-800">Notes</span>
+          <textarea
+            className="mt-1 min-h-24 w-full rounded-md border border-slate-300 px-3 py-2 text-slate-950 outline-none focus:border-teal-700"
+            defaultValue={current?.notes ?? ""}
+            name="symptom_notes"
+          />
+        </label>
+        <div className="flex justify-end">
+          <button
+            className="rounded-md bg-teal-700 px-4 py-2 font-medium text-white hover:bg-teal-800"
+            type="submit"
+          >
+            Save symptoms
+          </button>
+        </div>
+      </form>
+    </section>
+  );
+}
+
+function OutputSlider({
+  defaultValue,
+  label,
+  name,
+}: {
+  defaultValue: number;
+  label: string;
+  name: string;
+}) {
+  return (
+    <label className="block">
+      <span className="text-sm font-medium text-slate-800">{label}</span>
+      <div className="mt-1 flex items-center gap-3">
+        <span className="text-xs text-slate-500">1</span>
+        <input
+          className="w-full accent-teal-700"
+          defaultValue={defaultValue}
+          max="10"
+          min="1"
+          name={name}
+          type="range"
+        />
+        <span className="text-xs text-slate-500">10</span>
+      </div>
+    </label>
   );
 }
 

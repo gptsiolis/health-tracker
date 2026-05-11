@@ -290,6 +290,54 @@ export async function logVariableEntry(formData: FormData) {
   redirect(`/dashboard?date=${journalDate}&message=Entry logged.`);
 }
 
+export async function saveDailyOutputs(formData: FormData) {
+  const { supabase, userId } = await getUserId();
+  const journalDate = selectedDate(formData);
+  const scores = {
+    fatigue: Number(formData.get("fatigue")),
+    pain: Number(formData.get("pain")),
+    brain_fog: Number(formData.get("brain_fog")),
+    mood: Number(formData.get("mood")),
+  };
+
+  const { error } = await supabase.from("symptoms").upsert({
+    user_id: userId,
+    date: journalDate,
+    scores,
+    notes: optionalText(formData.get("symptom_notes")),
+  });
+
+  if (error) {
+    redirect(
+      `/dashboard?date=${journalDate}&message=${encodeURIComponent(error.message)}`,
+    );
+  }
+
+  revalidatePath("/dashboard");
+  redirect(`/dashboard?date=${journalDate}&message=Daily symptoms saved.`);
+}
+
+export async function saveDailyJournalNote(formData: FormData) {
+  const { supabase, userId } = await getUserId();
+  const journalDate = selectedDate(formData);
+
+  const { error } = await supabase.from("daily_journal_notes").upsert({
+    user_id: userId,
+    date: journalDate,
+    notes: String(formData.get("journal_notes") ?? ""),
+    updated_at: new Date().toISOString(),
+  });
+
+  if (error) {
+    redirect(
+      `/dashboard?date=${journalDate}&message=${encodeURIComponent(error.message)}`,
+    );
+  }
+
+  revalidatePath("/dashboard");
+  redirect(`/dashboard?date=${journalDate}&message=Journal note saved.`);
+}
+
 export async function deleteJournalEntry(formData: FormData) {
   const { supabase } = await getUserId();
   const journalDate = selectedDate(formData);

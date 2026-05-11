@@ -4,7 +4,6 @@ import { useMemo, useState } from "react";
 import { createVariable, deleteJournalEntry, logVariableEntry } from "./actions";
 
 export type Bucket =
-  | "symptoms"
   | "supplements"
   | "food"
   | "exercise"
@@ -40,7 +39,6 @@ export type JournalEntry = {
 };
 
 const bucketLabels: Record<Bucket, string> = {
-  symptoms: "Symptoms",
   supplements: "Supplements",
   food: "Food",
   exercise: "Exercise",
@@ -50,7 +48,6 @@ const bucketLabels: Record<Bucket, string> = {
 };
 
 const bucketOptions: Bucket[] = [
-  "symptoms",
   "supplements",
   "food",
   "exercise",
@@ -299,10 +296,6 @@ function LogVariableModal({
 }
 
 function BucketFields({ variable }: { variable: Variable }) {
-  if (variable.bucket === "symptoms") {
-    return <TextInput label="Score" max="10" min="1" name="score" required type="number" />;
-  }
-
   if (variable.bucket === "supplements") {
     return (
       <div className="grid gap-4 sm:grid-cols-2">
@@ -408,10 +401,6 @@ function Modal({
 }
 
 function entrySummary(entry: JournalEntry) {
-  if (entry.bucket === "symptoms") {
-    return `Score ${entry.data.score ?? "not set"}`;
-  }
-
   if (entry.bucket === "supplements") {
     return [entry.data.amount, entry.data.unit].filter(Boolean).join(" ") || "Supplement";
   }
