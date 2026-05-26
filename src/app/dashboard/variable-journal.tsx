@@ -148,6 +148,8 @@ export function VariableJournal({
             )}
           </div>
         ) : null}
+
+        <NutritionTotals entries={entries} />
       </div>
 
       <div className="mt-8 space-y-5">
@@ -182,6 +184,60 @@ export function VariableJournal({
       ) : null}
     </section>
   );
+}
+
+function NutritionTotals({ entries }: { entries: JournalEntry[] }) {
+  const totals = useMemo(() => {
+    const sum = { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 };
+    for (const entry of entries) {
+      if (entry.bucket !== "food") continue;
+      const data = entry.data as Record<string, unknown>;
+      sum.calories += toNumber(data.calories);
+      sum.protein += toNumber(data.protein);
+      sum.carbs += toNumber(data.carbs);
+      sum.fat += toNumber(data.fat);
+      const micros = data.micros as Record<string, unknown> | undefined;
+      sum.fiber += toNumber(micros?.["291"]);
+    }
+    return sum;
+  }, [entries]);
+
+  const items: Array<{ label: string; value: number; suffix: string }> = [
+    { label: "Calories", value: totals.calories, suffix: "" },
+    { label: "Protein", value: totals.protein, suffix: "g" },
+    { label: "Carbs", value: totals.carbs, suffix: "g" },
+    { label: "Fat", value: totals.fat, suffix: "g" },
+    { label: "Fiber", value: totals.fiber, suffix: "g" },
+  ];
+
+  return (
+    <div className="mt-4 grid grid-cols-5 gap-2 rounded-md border border-slate-200 bg-white p-3">
+      {items.map((item) => (
+        <div className="text-center" key={item.label}>
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+            {item.label}
+          </p>
+          <p className="mt-1 text-lg font-semibold text-slate-950">
+            {Math.round(item.value)}
+            {item.suffix ? (
+              <span className="ml-0.5 text-sm font-normal text-slate-500">
+                {item.suffix}
+              </span>
+            ) : null}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function toNumber(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
 }
 
 function BucketEntries({
