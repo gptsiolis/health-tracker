@@ -214,7 +214,6 @@ export async function createVariable(formData: FormData) {
   const journalDate = selectedDate(formData);
   const name = requiredText(formData.get("name"));
   const bucket = requiredText(formData.get("bucket"));
-  const defaultTime = optionalText(formData.get("default_time"));
   const allowedBuckets = [
     "supplements",
     "food",
@@ -234,7 +233,7 @@ export async function createVariable(formData: FormData) {
     bucket,
     default_unit: optionalText(formData.get("default_unit")),
     default_amount: optionalNumber(formData.get("default_amount")),
-    default_time: bucket === "sleep" ? null : defaultTime,
+    default_time: null,
     config: configForVariable(bucket, formData),
   });
 
