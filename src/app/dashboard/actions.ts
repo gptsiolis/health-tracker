@@ -144,6 +144,7 @@ export async function createVariable(formData: FormData) {
     "location",
     "sleep",
     "notes",
+    "other",
   ];
 
   if (!name || !bucket || !allowedBuckets.includes(bucket)) {
@@ -356,6 +357,28 @@ function dataForBucket(bucket: string, formData: FormData) {
     };
   }
 
+  if (bucket === "other") {
+    const fieldType = String(formData.get("other_field_type") ?? "");
+
+    if (fieldType === "boolean") {
+      return { value: formData.get("yes_no") === "yes" };
+    }
+
+    if (fieldType === "boolean_with_duration") {
+      const value = formData.get("yes_no") === "yes";
+      return {
+        value,
+        duration_min: value ? optionalNumber(formData.get("duration_min")) : null,
+      };
+    }
+
+    if (fieldType === "number_with_unit") {
+      return { value: optionalNumber(formData.get("value")) };
+    }
+
+    return {};
+  }
+
   return {};
 }
 
@@ -381,7 +404,7 @@ async function updateVariableDefaults({
     defaults.default_unit = optionalText(formData.get("unit"));
   }
 
-  if (bucket === "sleep") {
+  if (bucket === "sleep" || bucket === "other") {
     return;
   }
 
@@ -389,28 +412,41 @@ async function updateVariableDefaults({
 }
 
 function configForVariable(bucket: string, formData: FormData) {
-  if (bucket !== "sleep") {
-    return {};
+  if (bucket === "sleep") {
+    const metricType = String(formData.get("sleep_metric_type") ?? "other_number");
+    const configByMetric: Record<string, { label: string; unit?: string }> = {
+      rhr: { label: "RHR", unit: "bpm" },
+      hrv: { label: "HRV", unit: "ms" },
+      sleep_hours: { label: "Sleep hours", unit: "hours" },
+      sleep_score: { label: "Sleep score" },
+    };
+    const metricConfig = configByMetric[metricType] ?? {
+      label: "Value",
+      unit: optionalText(formData.get("sleep_unit")) ?? undefined,
+    };
+
+    return {
+      field_type: "single_number",
+      label: metricConfig.label,
+      unit: metricConfig.unit,
+      show_time: false,
+    };
   }
 
-  const metricType = String(formData.get("sleep_metric_type") ?? "other_number");
-  const configByMetric: Record<string, { label: string; unit?: string }> = {
-    rhr: { label: "RHR", unit: "bpm" },
-    hrv: { label: "HRV", unit: "ms" },
-    sleep_hours: { label: "Sleep hours", unit: "hours" },
-    sleep_score: { label: "Sleep score" },
-  };
-  const metricConfig = configByMetric[metricType] ?? {
-    label: "Value",
-    unit: optionalText(formData.get("sleep_unit")) ?? undefined,
-  };
+  if (bucket === "other") {
+    const fieldType = String(formData.get("other_field_type") ?? "boolean");
+    const unit =
+      fieldType === "number_with_unit"
+        ? optionalText(formData.get("other_unit")) ?? undefined
+        : undefined;
+    return {
+      field_type: fieldType,
+      unit,
+      show_time: true,
+    };
+  }
 
-  return {
-    field_type: "single_number",
-    label: metricConfig.label,
-    unit: metricConfig.unit,
-    show_time: false,
-  };
+  return {};
 }
 
 export async function addSymptomDefinition(formData: FormData) {

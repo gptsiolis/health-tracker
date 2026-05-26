@@ -10,7 +10,8 @@ export type Bucket =
   | "location"
   | "sleep"
   | "notes"
-  | "nutrition";
+  | "nutrition"
+  | "other";
 
 export type Variable = {
   id: string;
@@ -43,10 +44,26 @@ export type JournalEntry = {
 };
 
 type VariableConfig = {
-  field_type?: "single_number";
+  field_type?:
+    | "single_number"
+    | "boolean"
+    | "boolean_with_duration"
+    | "number_with_unit";
   label?: string;
   unit?: string;
   show_time?: boolean;
+};
+
+const OTHER_FIELD_TYPES = [
+  "boolean",
+  "boolean_with_duration",
+  "number_with_unit",
+] as const;
+type OtherFieldType = (typeof OTHER_FIELD_TYPES)[number];
+const OTHER_FIELD_LABELS: Record<OtherFieldType, string> = {
+  boolean: "Yes / No",
+  boolean_with_duration: "Yes / No + duration",
+  number_with_unit: "Number with unit",
 };
 
 const bucketLabels: Record<Bucket, string> = {
@@ -57,6 +74,7 @@ const bucketLabels: Record<Bucket, string> = {
   sleep: "Sleep",
   notes: "Notes",
   nutrition: "Nutrition",
+  other: "Other",
 };
 
 const bucketOptions: Bucket[] = [
@@ -66,6 +84,7 @@ const bucketOptions: Bucket[] = [
   "location",
   "sleep",
   "notes",
+  "other",
 ];
 
 const creatableBucketOptions: Bucket[] = bucketOptions.filter(
@@ -330,6 +349,8 @@ function CreateVariableModal({
 }) {
   const [bucket, setBucket] = useState<Bucket>("supplements");
   const [sleepMetric, setSleepMetric] = useState("rhr");
+  const [otherFieldType, setOtherFieldType] =
+    useState<OtherFieldType>("boolean");
 
   return (
     <Modal title="Create variable" onClose={onClose}>
@@ -375,6 +396,29 @@ function CreateVariableModal({
               <TextInput label="Display unit" name="sleep_unit" />
             ) : null}
           </>
+        ) : bucket === "other" ? (
+          <>
+            <label className="block">
+              <span className="text-sm font-medium text-slate-800">Format</span>
+              <select
+                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-slate-950 outline-none focus:border-teal-700"
+                name="other_field_type"
+                onChange={(event) =>
+                  setOtherFieldType(event.target.value as OtherFieldType)
+                }
+                value={otherFieldType}
+              >
+                {OTHER_FIELD_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {OTHER_FIELD_LABELS[type]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {otherFieldType === "number_with_unit" ? (
+              <TextInput label="Unit" name="other_unit" required />
+            ) : null}
+          </>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
             <TextInput label="Default amount" name="default_amount" type="number" />
@@ -409,6 +453,11 @@ function LogVariableModal({
         <input name="journal_date" type="hidden" value={selectedDate} />
         <input name="variable_id" type="hidden" value={variable.id} />
         <input name="bucket" type="hidden" value={variable.bucket} />
+        <input
+          name="other_field_type"
+          type="hidden"
+          value={variable.config.field_type ?? ""}
+        />
         {shouldShowTime(variable) ? (
           <HourSelect
             defaultValue={variable.default_time?.slice(0, 5) ?? ""}
@@ -484,7 +533,62 @@ function BucketFields({ variable }: { variable: Variable }) {
     return <TextInput label={variable.config.label ?? "Value"} name="value" type="number" />;
   }
 
+  if (variable.bucket === "other") {
+    const fieldType = variable.config.field_type;
+
+    if (fieldType === "boolean") {
+      return <YesNoToggle />;
+    }
+
+    if (fieldType === "boolean_with_duration") {
+      return (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <YesNoToggle />
+          <TextInput label="Duration (min)" name="duration_min" type="number" />
+        </div>
+      );
+    }
+
+    if (fieldType === "number_with_unit") {
+      const unit = variable.config.unit ?? "";
+      return (
+        <div className="flex items-end gap-3">
+          <div className="flex-1">
+            <TextInput
+              label={variable.config.label ?? "Value"}
+              name="value"
+              type="number"
+            />
+          </div>
+          {unit ? (
+            <span className="pb-2 text-sm text-slate-500">{unit}</span>
+          ) : null}
+        </div>
+      );
+    }
+
+    return null;
+  }
+
   return null;
+}
+
+function YesNoToggle() {
+  return (
+    <fieldset>
+      <legend className="text-sm font-medium text-slate-800">Value</legend>
+      <div className="mt-1 flex gap-2">
+        <label className="flex flex-1 cursor-pointer items-center justify-center rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-800 has-[:checked]:border-teal-700 has-[:checked]:bg-teal-50 has-[:checked]:text-teal-900">
+          <input className="sr-only" name="yes_no" type="radio" value="yes" />
+          Yes
+        </label>
+        <label className="flex flex-1 cursor-pointer items-center justify-center rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-800 has-[:checked]:border-teal-700 has-[:checked]:bg-teal-50 has-[:checked]:text-teal-900">
+          <input className="sr-only" name="yes_no" type="radio" value="no" />
+          No
+        </label>
+      </div>
+    </fieldset>
+  );
 }
 
 function TextInput({
@@ -637,6 +741,37 @@ function entrySummary(entry: JournalEntry) {
     return formatValueWithUnit(data.value as number | string | null | undefined, unit);
   }
 
+  if (entry.bucket === "other") {
+    const config = entryConfig(entry);
+    const fieldType = config?.field_type;
+    const data = entry.data as Record<string, unknown>;
+
+    if (fieldType === "boolean") {
+      if (data.value === true) return "Yes";
+      if (data.value === false) return "No";
+      return "—";
+    }
+
+    if (fieldType === "boolean_with_duration") {
+      if (data.value === false) return "No";
+      if (data.value !== true) return "—";
+      const duration = formatDurationMinutes(
+        typeof data.duration_min === "number" ? data.duration_min : null,
+      );
+      return duration ? `Yes — ${duration}` : "Yes";
+    }
+
+    if (fieldType === "number_with_unit") {
+      const unit = (data.unit as string | undefined) ?? config?.unit;
+      return formatValueWithUnit(
+        data.value as number | string | null | undefined,
+        unit,
+      );
+    }
+
+    return "—";
+  }
+
   return "Note";
 }
 
@@ -665,6 +800,20 @@ function formatValueWithUnit(
   }
 
   return [value, unit].filter(Boolean).join(" ");
+}
+
+function formatDurationMinutes(minutes: number | null | undefined) {
+  if (minutes === null || minutes === undefined || minutes <= 0) {
+    return null;
+  }
+
+  if (minutes < 60) {
+    return `${Math.round(minutes)} min`;
+  }
+
+  const hours = Math.floor(minutes / 60);
+  const remainder = Math.round(minutes - hours * 60);
+  return remainder > 0 ? `${hours}h ${remainder}m` : `${hours}h`;
 }
 
 function shouldShowTime(variable: Variable) {
