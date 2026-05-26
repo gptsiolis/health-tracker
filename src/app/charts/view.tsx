@@ -22,6 +22,7 @@ export type ChartRow = {
   protein?: number;
   carbs?: number;
   fat?: number;
+  fiber?: number;
   sleep_hours?: number;
   sleep_score?: number;
   rhr?: number;
@@ -45,6 +46,7 @@ const metrics: { key: MetricKey; label: string; color: string }[] = [
   { key: "protein", label: "Protein", color: "#15803d" },
   { key: "carbs", label: "Carbs", color: "#a16207" },
   { key: "fat", label: "Fat", color: "#6d28d9" },
+  { key: "fiber", label: "Fiber", color: "#0891b2" },
   { key: "exercise_minutes", label: "Exercise minutes", color: "#0e7490" },
   { key: "exercise_intensity", label: "Exercise intensity", color: "#db2777" },
 ];

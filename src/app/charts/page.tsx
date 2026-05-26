@@ -15,14 +15,13 @@ type SymptomRow = {
   scores: Record<string, number>;
 };
 
-type FoodRow = {
-  data: {
-    calories?: number | null;
-    protein?: number | null;
-    carbs?: number | null;
-    fat?: number | null;
-  } | null;
+type NutritionRow = {
   entry_date: string;
+  data: { value?: number | string | null } | null;
+  variables:
+    | { name: string }
+    | { name: string }[]
+    | null;
 };
 
 type SleepRow = {
@@ -53,7 +52,7 @@ export default async function ChartsPage({ searchParams }: ChartsPageProps) {
     redirect("/login");
   }
 
-  const [symptoms, foods, sleep, exercise] = await Promise.all([
+  const [symptoms, nutrition, sleep, exercise] = await Promise.all([
     supabase
       .from("symptoms")
       .select("date, scores")
@@ -62,8 +61,8 @@ export default async function ChartsPage({ searchParams }: ChartsPageProps) {
       .order("date", { ascending: true }),
     supabase
       .from("journal_entries")
-      .select("data, entry_date")
-      .eq("bucket", "food")
+      .select("entry_date, data, variables(name)")
+      .eq("bucket", "nutrition")
       .gte("entry_date", fromDate)
       .lte("entry_date", toDate),
     supabase
@@ -80,7 +79,7 @@ export default async function ChartsPage({ searchParams }: ChartsPageProps) {
 
   const rows = buildChartRows({
     exercise: (exercise.data ?? []) as ExerciseRow[],
-    foods: (foods.data ?? []) as FoodRow[],
+    nutrition: (nutrition.data ?? []) as NutritionRow[],
     fromDate,
     sleep: (sleep.data ?? []) as SleepRow[],
     symptoms: (symptoms.data ?? []) as SymptomRow[],
@@ -142,14 +141,14 @@ function DateInput({
 
 function buildChartRows({
   exercise,
-  foods,
+  nutrition,
   fromDate,
   sleep,
   symptoms,
   toDate,
 }: {
   exercise: ExerciseRow[];
-  foods: FoodRow[];
+  nutrition: NutritionRow[];
   fromDate: string;
   sleep: SleepRow[];
   symptoms: SymptomRow[];
@@ -170,13 +169,17 @@ function buildChartRows({
     chartRow.mood = row.scores.mood;
   }
 
-  for (const row of foods) {
+  for (const row of nutrition) {
     const chartRow = rows.get(row.entry_date);
     if (!chartRow) continue;
-    chartRow.calories = addValue(chartRow.calories, row.data?.calories ?? null);
-    chartRow.protein = addValue(chartRow.protein, row.data?.protein ?? null);
-    chartRow.carbs = addValue(chartRow.carbs, row.data?.carbs ?? null);
-    chartRow.fat = addValue(chartRow.fat, row.data?.fat ?? null);
+    const name = nutritionName(row.variables);
+    const value = toNumber(row.data?.value);
+    if (value === null) continue;
+    if (name === "Calories") chartRow.calories = value;
+    else if (name === "Protein") chartRow.protein = value;
+    else if (name === "Carbs") chartRow.carbs = value;
+    else if (name === "Fat") chartRow.fat = value;
+    else if (name === "Fiber") chartRow.fiber = value;
   }
 
   for (const row of sleep) {
@@ -204,6 +207,23 @@ function buildChartRows({
 
 function addValue(current: number | undefined, next: number | null) {
   return next === null ? current : (current ?? 0) + next;
+}
+
+function nutritionName(
+  variables: { name: string } | { name: string }[] | null,
+): string | null {
+  if (!variables) return null;
+  if (Array.isArray(variables)) return variables[0]?.name ?? null;
+  return variables.name;
+}
+
+function toNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
 }
 
 function datesBetween(fromDate: string, toDate: string) {

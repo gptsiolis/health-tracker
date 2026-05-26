@@ -62,7 +62,6 @@ const bucketLabels: Record<Bucket, string> = {
 const bucketOptions: Bucket[] = [
   "supplements",
   "food",
-  "nutrition",
   "exercise",
   "location",
   "sleep",
@@ -70,7 +69,7 @@ const bucketOptions: Bucket[] = [
 ];
 
 const creatableBucketOptions: Bucket[] = bucketOptions.filter(
-  (bucket) => bucket !== "food" && bucket !== "nutrition",
+  (bucket) => bucket !== "food",
 );
 
 const sleepMetricOptions = [
