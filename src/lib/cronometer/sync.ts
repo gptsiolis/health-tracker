@@ -7,26 +7,11 @@ import {
 } from "./client";
 import { normalizeDiary, type FoodLookup } from "./normalize";
 import type { DiaryEntry, NormalizedFoodEntry } from "./types";
+import { MACRO_FIELDS, MICRO_FIELDS } from "@/lib/nutrition/fields";
 
 const EXTERNAL_SOURCE = "cronometer";
 const TOTALS_EXTERNAL_SOURCE = "cronometer-totals";
 const VANCOUVER_TZ = "America/Vancouver";
-
-type NutritionKey = "calories" | "protein" | "carbs" | "fat" | "fiber";
-
-const NUTRITION_VARIABLES: Array<{
-  key: NutritionKey;
-  name: string;
-  unit: string;
-}> = [
-  { key: "calories", name: "Calories", unit: "kcal" },
-  { key: "protein", name: "Protein", unit: "g" },
-  { key: "carbs", name: "Carbs", unit: "g" },
-  { key: "fat", name: "Fat", unit: "g" },
-  { key: "fiber", name: "Fiber", unit: "g" },
-];
-
-const FIBER_MICRO_ID = "291";
 
 export type SyncOptions = {
   date?: string;
@@ -145,38 +130,50 @@ async function resolveVariableId(
   return inserted.id as string;
 }
 
-function computeTotals(entries: NormalizedFoodEntry[]) {
-  const totals: Record<NutritionKey, number> = {
-    calories: 0,
-    protein: 0,
-    carbs: 0,
-    fat: 0,
-    fiber: 0,
-  };
-  for (const entry of entries) {
-    totals.calories += entry.calories ?? 0;
-    totals.protein += entry.protein ?? 0;
-    totals.carbs += entry.carbs ?? 0;
-    totals.fat += entry.fat ?? 0;
-    const fiber = entry.micros?.[FIBER_MICRO_ID];
-    if (typeof fiber === "number") {
-      totals.fiber += fiber;
+type DailyNutritionEntry = {
+  key: string;
+  name: string;
+  unit: string;
+  value: number;
+};
+
+function computeDailyNutrition(
+  entries: NormalizedFoodEntry[],
+): DailyNutritionEntry[] {
+  const results: DailyNutritionEntry[] = [];
+
+  for (const macro of MACRO_FIELDS) {
+    let sum = 0;
+    for (const entry of entries) {
+      const value = entry[macro.key];
+      if (typeof value === "number") sum += value;
     }
+    results.push({ key: macro.key, name: macro.name, unit: macro.unit, value: sum });
   }
-  return totals;
+
+  for (const micro of MICRO_FIELDS) {
+    let sum = 0;
+    for (const entry of entries) {
+      const raw = entry.micros?.[String(micro.microId)];
+      if (typeof raw === "number") sum += raw;
+    }
+    results.push({ key: micro.key, name: micro.name, unit: micro.unit, value: sum });
+  }
+
+  return results;
 }
 
 async function upsertNutritionTotals(
   supabase: SupabaseClient,
   userId: string,
   date: string,
-  totals: Record<NutritionKey, number>,
+  totals: DailyNutritionEntry[],
   variableCache: Map<string, string>,
 ): Promise<{ inserted: number; skipped: number }> {
   let inserted = 0;
   let skipped = 0;
 
-  for (const variable of NUTRITION_VARIABLES) {
+  for (const variable of totals) {
     const variableId = await resolveVariableId(
       supabase,
       userId,
@@ -193,7 +190,7 @@ async function upsertNutritionTotals(
       },
     );
 
-    const value = Math.round(totals[variable.key] * 100) / 100;
+    const value = Math.round(variable.value * 1000) / 1000;
 
     const { error, count } = await supabase
       .from("journal_entries")
@@ -290,7 +287,7 @@ export async function syncCronometerForUser(
         }
       }
 
-      const totals = computeTotals(normalized);
+      const totals = computeDailyNutrition(normalized);
       const totalsResult = await upsertNutritionTotals(
         supabase,
         userId,

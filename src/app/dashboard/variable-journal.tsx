@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { createVariable, deleteJournalEntry, logVariableEntry } from "./actions";
+import { MICRO_FIELDS, type MicroField } from "@/lib/nutrition/fields";
 
 export type Bucket =
   | "supplements"
@@ -208,8 +209,11 @@ export function VariableJournal({
 }
 
 function NutritionTotals({ entries }: { entries: JournalEntry[] }) {
-  const totals = useMemo(() => {
+  const { totals, microTotals } = useMemo(() => {
     const sum = { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 };
+    const micros: Record<string, number> = {};
+    for (const field of MICRO_FIELDS) micros[field.key] = 0;
+
     for (const entry of entries) {
       if (entry.bucket !== "food") continue;
       const data = entry.data as Record<string, unknown>;
@@ -217,10 +221,13 @@ function NutritionTotals({ entries }: { entries: JournalEntry[] }) {
       sum.protein += toNumber(data.protein);
       sum.carbs += toNumber(data.carbs);
       sum.fat += toNumber(data.fat);
-      const micros = data.micros as Record<string, unknown> | undefined;
-      sum.fiber += toNumber(micros?.["291"]);
+      const dataMicros = data.micros as Record<string, unknown> | undefined;
+      sum.fiber += toNumber(dataMicros?.["291"]);
+      for (const field of MICRO_FIELDS) {
+        micros[field.key] += toNumber(dataMicros?.[String(field.microId)]);
+      }
     }
-    return sum;
+    return { totals: sum, microTotals: micros };
   }, [entries]);
 
   const totalKcal = totals.calories;
@@ -255,28 +262,60 @@ function NutritionTotals({ entries }: { entries: JournalEntry[] }) {
     { label: "Fiber", value: totals.fiber, suffix: "g", percent: null },
   ];
 
+  const microsBySection = MICRO_FIELDS.filter(
+    (field) => field.category !== "headline",
+  );
+
   return (
-    <div className="mt-4 grid grid-cols-5 gap-2 rounded-md border border-slate-200 bg-white p-3">
-      {items.map((item) => (
-        <div className="text-center" key={item.label}>
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-            {item.label}
-          </p>
-          <p className="mt-1 text-lg font-semibold text-slate-950">
-            {Math.round(item.value)}
-            {item.suffix ? (
-              <span className="ml-0.5 text-sm font-normal text-slate-500">
-                {item.suffix}
-              </span>
-            ) : null}
-          </p>
-          <p className="mt-0.5 h-3 text-[10px] font-normal text-slate-400">
-            {item.percent !== null ? `${item.percent}% kcal` : ""}
-          </p>
-        </div>
-      ))}
+    <div className="mt-4 space-y-3">
+      <div className="grid grid-cols-5 gap-2 rounded-md border border-slate-200 bg-white p-3">
+        {items.map((item) => (
+          <div className="text-center" key={item.label}>
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+              {item.label}
+            </p>
+            <p className="mt-1 text-lg font-semibold text-slate-950">
+              {Math.round(item.value)}
+              {item.suffix ? (
+                <span className="ml-0.5 text-sm font-normal text-slate-500">
+                  {item.suffix}
+                </span>
+              ) : null}
+            </p>
+            <p className="mt-0.5 h-3 text-[10px] font-normal text-slate-400">
+              {item.percent !== null ? `${item.percent}% kcal` : ""}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-2 gap-x-3 gap-y-1 rounded-md border border-slate-200 bg-white p-3 sm:grid-cols-3 lg:grid-cols-5">
+        {microsBySection.map((field) => (
+          <MicroTile field={field} key={field.key} value={microTotals[field.key]} />
+        ))}
+      </div>
     </div>
   );
+}
+
+function MicroTile({ field, value }: { field: MicroField; value: number }) {
+  return (
+    <div className="flex items-baseline justify-between gap-2 text-xs">
+      <span className="truncate text-slate-500">{field.name}</span>
+      <span className="font-medium text-slate-900">
+        {formatMicroValue(value)}
+        <span className="ml-0.5 font-normal text-slate-400">{field.unit}</span>
+      </span>
+    </div>
+  );
+}
+
+function formatMicroValue(value: number) {
+  if (value === 0) return "0";
+  if (Math.abs(value) >= 100) return Math.round(value).toString();
+  if (Math.abs(value) >= 10) return value.toFixed(1);
+  if (Math.abs(value) >= 1) return value.toFixed(2);
+  return value.toFixed(3);
 }
 
 function toNumber(value: unknown): number {
