@@ -556,19 +556,29 @@ function entrySummary(entry: JournalEntry) {
   }
 
   if (entry.bucket === "food") {
-    const amount = entry.data.amount;
-    const unit = entry.data.unit;
-    const calories = entry.data.calories;
-    const protein = entry.data.protein;
+    const data = entry.data as Record<string, unknown>;
+    const micros = data.micros as Record<string, unknown> | undefined;
     const parts: string[] = [];
+    const amount = data.amount;
+    const unit = data.unit;
     if (amount !== null && amount !== undefined && amount !== "") {
       parts.push([amount, unit].filter(Boolean).join(" "));
     }
-    if (calories !== null && calories !== undefined) {
-      parts.push(`${Math.round(Number(calories))} cal`);
+    if (data.calories !== null && data.calories !== undefined) {
+      parts.push(`${Math.round(Number(data.calories))} cal`);
     }
-    if (protein !== null && protein !== undefined) {
-      parts.push(`${Math.round(Number(protein))}g protein`);
+    if (data.protein !== null && data.protein !== undefined) {
+      parts.push(`${Math.round(Number(data.protein))}g protein`);
+    }
+    if (data.carbs !== null && data.carbs !== undefined) {
+      parts.push(`${Math.round(Number(data.carbs))}g carbs`);
+    }
+    if (data.fat !== null && data.fat !== undefined) {
+      parts.push(`${Math.round(Number(data.fat))}g fat`);
+    }
+    const fiber = micros?.["291"];
+    if (fiber !== null && fiber !== undefined && fiber !== "") {
+      parts.push(`${Math.round(Number(fiber))}g fiber`);
     }
     return parts.length > 0 ? parts.join(" · ") : "Food";
   }
