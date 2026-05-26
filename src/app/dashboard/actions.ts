@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { syncCronometerForUser } from "@/lib/cronometer/sync";
 
 async function getUserId() {
   const supabase = await createServerSupabaseClient();
@@ -129,84 +130,6 @@ export async function saveDailyEntry(formData: FormData) {
 
   revalidatePath("/dashboard");
   redirect(`/dashboard?date=${journalDate}&message=Daily entry saved.`);
-}
-
-export async function saveManualFood(formData: FormData) {
-  const { supabase, userId } = await getUserId();
-  const journalDate = selectedDate(formData);
-  const eatenAt = timestampForDate(journalDate, formData.get("food_time"));
-  const foodsList = String(formData.get("foods_list") ?? "")
-    .split("\n")
-    .map((food) => food.trim())
-    .filter(Boolean);
-  const microsText = String(formData.get("micros") ?? "").trim();
-  let micros: Record<string, number | string | null> = {};
-
-  if (microsText) {
-    try {
-      micros = JSON.parse(microsText) as Record<string, number | string | null>;
-    } catch {
-      redirect("/dashboard?message=Micros must be valid JSON.");
-    }
-  }
-
-  if (!eatenAt || Number.isNaN(new Date(eatenAt).getTime())) {
-    redirect(
-      `/dashboard?date=${journalDate}&message=Food needs a valid journal date.`,
-    );
-  }
-
-  const { error } = await supabase.from("foods").insert({
-    user_id: userId,
-    calories: optionalNumber(formData.get("calories")),
-    protein: optionalNumber(formData.get("protein")),
-    carbs: optionalNumber(formData.get("carbs")),
-    fat: optionalNumber(formData.get("fat")),
-    micros,
-    foods_list: foodsList,
-    eaten_at: eatenAt,
-    source: "manual",
-    raw_image_url: null,
-  });
-
-  if (error) {
-    redirect(
-      `/dashboard?date=${journalDate}&message=${encodeURIComponent(error.message)}`,
-    );
-  }
-
-  revalidatePath("/dashboard");
-  redirect(`/dashboard?date=${journalDate}&message=Food saved.`);
-}
-
-export async function deleteEntry(formData: FormData) {
-  const { supabase } = await getUserId();
-  const table = String(formData.get("table") ?? "");
-  const id = String(formData.get("id") ?? "");
-  const journalDate = selectedDate(formData);
-  const allowedTables = [
-    "exercise",
-    "foods",
-    "location",
-    "sleep",
-    "supplements",
-    "symptoms",
-  ];
-
-  if (!allowedTables.includes(table) || !id) {
-    redirect(`/dashboard?date=${journalDate}&message=Invalid delete request.`);
-  }
-
-  const { error } = await supabase.from(table).delete().eq("id", id);
-
-  if (error) {
-    redirect(
-      `/dashboard?date=${journalDate}&message=${encodeURIComponent(error.message)}`,
-    );
-  }
-
-  revalidatePath("/dashboard");
-  redirect(`/dashboard?date=${journalDate}&message=Entry deleted.`);
 }
 
 export async function createVariable(formData: FormData) {
@@ -346,6 +269,34 @@ export async function saveDailyJournalNote(formData: FormData) {
 
   revalidatePath("/dashboard");
   redirect(`/dashboard?date=${journalDate}&message=Journal note saved.`);
+}
+
+export async function syncCronometer(formData: FormData) {
+  const { supabase, userId } = await getUserId();
+  const journalDate = selectedDate(formData) || "";
+
+  const result = await syncCronometerForUser(supabase, userId, {
+    date: journalDate || undefined,
+  });
+
+  revalidatePath("/dashboard");
+
+  const datePart = journalDate ? `&date=${journalDate}` : "";
+
+  if (!result.ok) {
+    redirect(
+      `/dashboard?message=${encodeURIComponent(
+        `Cronometer sync failed: ${result.error}`,
+      )}${datePart}`,
+    );
+  }
+
+  const summary =
+    result.inserted > 0
+      ? `Synced ${result.inserted} Cronometer entries.`
+      : "Cronometer is already up to date.";
+
+  redirect(`/dashboard?message=${encodeURIComponent(summary)}${datePart}`);
 }
 
 export async function deleteJournalEntry(formData: FormData) {

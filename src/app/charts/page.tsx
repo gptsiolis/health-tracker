@@ -16,11 +16,13 @@ type SymptomRow = {
 };
 
 type FoodRow = {
-  calories: number | null;
-  protein: number | null;
-  carbs: number | null;
-  fat: number | null;
-  eaten_at: string;
+  data: {
+    calories?: number | null;
+    protein?: number | null;
+    carbs?: number | null;
+    fat?: number | null;
+  } | null;
+  entry_date: string;
 };
 
 type SleepRow = {
@@ -59,10 +61,11 @@ export default async function ChartsPage({ searchParams }: ChartsPageProps) {
       .lte("date", toDate)
       .order("date", { ascending: true }),
     supabase
-      .from("foods")
-      .select("calories, protein, carbs, fat, eaten_at")
-      .gte("eaten_at", fromDate)
-      .lt("eaten_at", afterToDate),
+      .from("journal_entries")
+      .select("data, entry_date")
+      .eq("bucket", "food")
+      .gte("entry_date", fromDate)
+      .lte("entry_date", toDate),
     supabase
       .from("sleep")
       .select("hours, rhr, hrv, sleep_score, wake_time")
@@ -168,12 +171,12 @@ function buildChartRows({
   }
 
   for (const row of foods) {
-    const chartRow = rows.get(dateOnly(row.eaten_at));
+    const chartRow = rows.get(row.entry_date);
     if (!chartRow) continue;
-    chartRow.calories = addValue(chartRow.calories, row.calories);
-    chartRow.protein = addValue(chartRow.protein, row.protein);
-    chartRow.carbs = addValue(chartRow.carbs, row.carbs);
-    chartRow.fat = addValue(chartRow.fat, row.fat);
+    chartRow.calories = addValue(chartRow.calories, row.data?.calories ?? null);
+    chartRow.protein = addValue(chartRow.protein, row.data?.protein ?? null);
+    chartRow.carbs = addValue(chartRow.carbs, row.data?.carbs ?? null);
+    chartRow.fat = addValue(chartRow.fat, row.data?.fat ?? null);
   }
 
   for (const row of sleep) {

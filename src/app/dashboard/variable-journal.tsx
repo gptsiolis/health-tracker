@@ -59,7 +59,6 @@ const bucketLabels: Record<Bucket, string> = {
 
 const bucketOptions: Bucket[] = [
   "supplements",
-  "food",
   "exercise",
   "location",
   "sleep",

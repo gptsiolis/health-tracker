@@ -9,6 +9,7 @@ import {
   type Variable,
 } from "./variable-journal";
 import { DatePickerButton } from "./date-picker";
+import { CronometerSyncButton } from "./cronometer-sync-button";
 
 type DashboardPageProps = {
   searchParams: Promise<{
@@ -47,17 +48,6 @@ type LocationEntry = {
   label: string;
   started_at: string;
   ended_at: string | null;
-};
-
-type FoodEntry = {
-  id: string;
-  calories: number | null;
-  protein: number | null;
-  carbs: number | null;
-  fat: number | null;
-  foods_list: string[];
-  eaten_at: string;
-  source: string;
 };
 
 type SleepEntry = {
@@ -102,12 +92,12 @@ export default async function DashboardPage({
     supplements,
     exercise,
     locations,
-    foods,
     sleep,
     variables,
     journalEntries,
     dailyJournalNote,
     symptomDefinitions,
+    cronometerSyncState,
   ] =
     await Promise.all([
     supabase
@@ -138,13 +128,6 @@ export default async function DashboardPage({
       .order("started_at", { ascending: false })
       .limit(7),
     supabase
-      .from("foods")
-      .select("id, calories, protein, carbs, fat, foods_list, eaten_at, source")
-      .gte("eaten_at", selectedDate)
-      .lt("eaten_at", nextDate)
-      .order("eaten_at", { ascending: false })
-      .limit(7),
-    supabase
       .from("sleep")
       .select("id, hours, bedtime, wake_time, rhr, hrv, sleep_score")
       .gte("wake_time", selectedDate)
@@ -173,6 +156,11 @@ export default async function DashboardPage({
       .is("archived_at", null)
       .order("sort_order", { ascending: true })
       .order("created_at", { ascending: true }),
+    supabase
+      .from("cronometer_sync_state")
+      .select("last_synced_at")
+      .eq("user_id", user.id)
+      .maybeSingle(),
   ]);
   let activeSymptomDefinitions = (symptomDefinitions.data ??
     []) as SymptomDefinition[];
@@ -225,7 +213,14 @@ export default async function DashboardPage({
             </p>
           </div>
 
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap items-start gap-3">
+            <CronometerSyncButton
+              lastSyncedAt={
+                (cronometerSyncState.data as { last_synced_at: string | null } | null)
+                  ?.last_synced_at ?? null
+              }
+              selectedDate={selectedDate}
+            />
             <Link
               className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-800 hover:bg-white"
               href="/charts"
@@ -303,7 +298,6 @@ export default async function DashboardPage({
           <EntryPanel title="Timeline">
             <Timeline
               exercise={(exercise.data ?? []) as ExerciseEntry[]}
-              foods={(foods.data ?? []) as FoodEntry[]}
               locations={(locations.data ?? []) as LocationEntry[]}
               sleep={(sleep.data ?? []) as SleepEntry[]}
               supplements={(supplements.data ?? []) as SupplementEntry[]}
@@ -409,25 +403,16 @@ type TimelineItem = {
 
 function Timeline({
   exercise,
-  foods,
   locations,
   sleep,
   supplements,
 }: {
   exercise: ExerciseEntry[];
-  foods: FoodEntry[];
   locations: LocationEntry[];
   sleep: SleepEntry[];
   supplements: SupplementEntry[];
 }) {
   const items: TimelineItem[] = [
-    ...foods.map((entry) => ({
-      id: `food-${entry.id}`,
-      time: timeFromDateTime(entry.eaten_at),
-      title:
-        entry.foods_list.length > 0 ? entry.foods_list.join(", ") : "Food entry",
-      detail: `${entry.calories ?? "No"} calories`,
-    })),
     ...supplements.map((entry) => ({
       id: `supplement-${entry.id}`,
       time: timeFromDateTime(entry.taken_at),
