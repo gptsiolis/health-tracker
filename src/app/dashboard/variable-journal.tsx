@@ -202,12 +202,36 @@ function NutritionTotals({ entries }: { entries: JournalEntry[] }) {
     return sum;
   }, [entries]);
 
-  const items: Array<{ label: string; value: number; suffix: string }> = [
-    { label: "Calories", value: totals.calories, suffix: "" },
-    { label: "Protein", value: totals.protein, suffix: "g" },
-    { label: "Carbs", value: totals.carbs, suffix: "g" },
-    { label: "Fat", value: totals.fat, suffix: "g" },
-    { label: "Fiber", value: totals.fiber, suffix: "g" },
+  const totalKcal = totals.calories;
+  const percent = (kcal: number) =>
+    totalKcal > 0 ? Math.round((kcal / totalKcal) * 100) : null;
+
+  const items: Array<{
+    label: string;
+    value: number;
+    suffix: string;
+    percent: number | null;
+  }> = [
+    { label: "Calories", value: totals.calories, suffix: "", percent: null },
+    {
+      label: "Protein",
+      value: totals.protein,
+      suffix: "g",
+      percent: percent(totals.protein * 4),
+    },
+    {
+      label: "Carbs",
+      value: totals.carbs,
+      suffix: "g",
+      percent: percent(totals.carbs * 4),
+    },
+    {
+      label: "Fat",
+      value: totals.fat,
+      suffix: "g",
+      percent: percent(totals.fat * 9),
+    },
+    { label: "Fiber", value: totals.fiber, suffix: "g", percent: null },
   ];
 
   return (
@@ -224,6 +248,9 @@ function NutritionTotals({ entries }: { entries: JournalEntry[] }) {
                 {item.suffix}
               </span>
             ) : null}
+          </p>
+          <p className="mt-0.5 h-3 text-[10px] font-normal text-slate-400">
+            {item.percent !== null ? `${item.percent}% kcal` : ""}
           </p>
         </div>
       ))}
