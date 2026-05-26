@@ -87,15 +87,6 @@ export function DailyOutputsPanel({
             symptomKey={key}
           />
         ))}
-        <label className="block">
-          <span className="text-sm font-medium text-slate-800">Notes</span>
-          <textarea
-            className="mt-1 min-h-24 w-full rounded-md border border-slate-300 px-3 py-2 text-slate-950 outline-none focus:border-teal-700 disabled:bg-slate-50 disabled:text-slate-500"
-            defaultValue={symptomMeta.text}
-            disabled={isLocked}
-            name="symptom_notes"
-          />
-        </label>
         <div className="flex justify-end">
           <button
             className="rounded-md bg-teal-700 px-4 py-2 font-medium text-white hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-slate-300"
