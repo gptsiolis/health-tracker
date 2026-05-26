@@ -287,10 +287,12 @@ function CreateVariableModal({
             ) : null}
           </>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className={`grid gap-4 ${bucket === "supplements" ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>
             <TextInput label="Default amount" name="default_amount" type="number" />
             <TextInput label="Default unit" name="default_unit" />
-            <TextInput label="Default time" name="default_time" type="time" />
+            {bucket === "supplements" ? null : (
+              <TextInput label="Default time" name="default_time" type="time" />
+            )}
           </div>
         )}
         <div className="flex justify-end gap-3">
