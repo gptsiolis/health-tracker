@@ -321,11 +321,10 @@ function LogVariableModal({
         <input name="variable_id" type="hidden" value={variable.id} />
         <input name="bucket" type="hidden" value={variable.bucket} />
         {shouldShowTime(variable) ? (
-          <TextInput
+          <HourSelect
             defaultValue={variable.default_time?.slice(0, 5) ?? ""}
             label="Time"
             name="time_of_day"
-            type="time"
           />
         ) : null}
         <BucketFields variable={variable} />
@@ -389,7 +388,7 @@ function BucketFields({ variable }: { variable: Variable }) {
   }
 
   if (variable.bucket === "location") {
-    return <TextInput label="End time" name="end_time" type="time" />;
+    return <HourSelect label="End time" name="end_time" />;
   }
 
   if (variable.bucket === "sleep") {
@@ -422,6 +421,45 @@ function TextInput({
       />
     </label>
   );
+}
+
+function HourSelect({
+  defaultValue,
+  label,
+  name,
+}: {
+  defaultValue?: string;
+  label: string;
+  name: string;
+}) {
+  const normalized = defaultValue ? defaultValue.split(":")[0].padStart(2, "0") + ":00" : "";
+
+  return (
+    <label className="block">
+      <span className="text-sm font-medium text-slate-800">{label}</span>
+      <select
+        className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-slate-950 outline-none focus:border-teal-700"
+        defaultValue={normalized}
+        name={name}
+      >
+        <option value="">Anytime</option>
+        {Array.from({ length: 24 }, (_, hour) => {
+          const value = `${hour.toString().padStart(2, "0")}:00`;
+          return (
+            <option key={value} value={value}>
+              {formatHourLabel(hour)}
+            </option>
+          );
+        })}
+      </select>
+    </label>
+  );
+}
+
+function formatHourLabel(hour: number) {
+  const period = hour < 12 ? "AM" : "PM";
+  const displayHour = hour % 12 === 0 ? 12 : hour % 12;
+  return `${displayHour} ${period}`;
 }
 
 function Modal({
@@ -539,6 +577,6 @@ function formatTimeOfDay(value: string | null) {
 
   return new Intl.DateTimeFormat("en", {
     hour: "numeric",
-    minute: "2-digit",
+    ...(minutes === 0 ? {} : { minute: "2-digit" }),
   }).format(new Date(2000, 0, 1, hours, minutes));
 }
