@@ -1,19 +1,14 @@
 export type DiaryEntry = {
   servingId?: number | string;
   foodId?: number;
-  foodName?: string;
-  food?: { name?: string; brand?: string } & Record<string, unknown>;
   measureId?: number;
-  measureName?: string;
   grams?: number;
-  amount?: number;
-  unitName?: string;
   day?: string;
-  time?: string;
   order?: number;
   type?: string;
-  nutrients?: Record<string, number>;
-} & Record<string, unknown>;
+};
+
+export type MealGroup = "breakfast" | "lunch" | "dinner" | "snacks" | "uncategorized";
 
 export type DiaryResponse = {
   diary?: DiaryEntry[];
@@ -25,9 +20,10 @@ export type NormalizedFoodEntry = {
   entryDate: string;
   timeOfDay: string | null;
   foodName: string;
-  brand: string | null;
+  mealGroup: MealGroup;
   amount: number | null;
   unit: string | null;
+  grams: number | null;
   calories: number | null;
   protein: number | null;
   carbs: number | null;

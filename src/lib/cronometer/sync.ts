@@ -1,7 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { CronometerError, getDiary } from "./client";
-import { normalizeDiary } from "./normalize";
-import type { NormalizedFoodEntry } from "./types";
+import {
+  CronometerError,
+  getDiary,
+  getFood,
+  type CronometerFood,
+} from "./client";
+import { normalizeDiary, type FoodLookup } from "./normalize";
+import type { DiaryEntry, NormalizedFoodEntry } from "./types";
 
 const EXTERNAL_SOURCE = "cronometer";
 const VANCOUVER_TZ = "America/Vancouver";
@@ -40,15 +45,46 @@ function offsetDate(isoDate: string, days: number): string {
 function buildEntryData(entry: NormalizedFoodEntry) {
   return {
     food_name: entry.foodName,
-    brand: entry.brand,
+    meal_group: entry.mealGroup,
     amount: entry.amount,
     unit: entry.unit,
+    grams: entry.grams,
     calories: entry.calories,
     protein: entry.protein,
     carbs: entry.carbs,
     fat: entry.fat,
     micros: entry.micros,
   };
+}
+
+async function fetchFoodLookup(entries: DiaryEntry[]): Promise<FoodLookup> {
+  const uniqueIds = Array.from(
+    new Set(
+      entries
+        .map((entry) => entry.foodId)
+        .filter((id): id is number => typeof id === "number"),
+    ),
+  );
+
+  const lookup: FoodLookup = new Map();
+  const foods = await Promise.all(
+    uniqueIds.map(async (foodId) => {
+      try {
+        return await getFood(foodId);
+      } catch {
+        return null;
+      }
+    }),
+  );
+
+  for (let index = 0; index < uniqueIds.length; index++) {
+    const food = foods[index];
+    if (food) {
+      lookup.set(uniqueIds[index], food as CronometerFood);
+    }
+  }
+
+  return lookup;
 }
 
 async function resolveVariableId(
@@ -109,7 +145,9 @@ export async function syncCronometerForUser(
   try {
     for (const date of dates) {
       const diary = await getDiary(date);
-      const normalized = normalizeDiary(diary.diary ?? [], date);
+      const rawEntries = (diary.diary ?? []) as DiaryEntry[];
+      const foodLookup = await fetchFoodLookup(rawEntries);
+      const normalized = normalizeDiary(rawEntries, foodLookup, date);
 
       for (const entry of normalized) {
         const variableId = await resolveVariableId(

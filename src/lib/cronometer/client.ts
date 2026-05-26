@@ -157,6 +157,27 @@ export async function getDiary(isoDate: string): Promise<DiaryResponse> {
   });
 }
 
+export type CronometerFood = {
+  id: number;
+  name: string;
+  defaultMeasureId: number;
+  nutrients?: Array<{ id: number; amount: number; type?: string }>;
+  measures?: Array<{
+    id: number;
+    name: string;
+    value: number;
+    amount: number;
+    type?: string;
+  }>;
+};
+
+export async function getFood(foodId: number): Promise<CronometerFood> {
+  return postV2<CronometerFood>("/api/v2/get_food", {
+    id: foodId,
+    config: { call_version: 1 },
+  });
+}
+
 export function resetCronometerSession() {
   cachedSession = null;
 }

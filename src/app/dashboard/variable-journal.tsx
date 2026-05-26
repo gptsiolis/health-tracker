@@ -59,11 +59,16 @@ const bucketLabels: Record<Bucket, string> = {
 
 const bucketOptions: Bucket[] = [
   "supplements",
+  "food",
   "exercise",
   "location",
   "sleep",
   "notes",
 ];
+
+const creatableBucketOptions: Bucket[] = bucketOptions.filter(
+  (bucket) => bucket !== "food",
+);
 
 const sleepMetricOptions = [
   { label: "RHR", value: "rhr" },
@@ -255,7 +260,7 @@ function CreateVariableModal({
             required
             value={bucket}
           >
-            {bucketOptions.map((bucket) => (
+            {creatableBucketOptions.map((bucket) => (
               <option key={bucket} value={bucket}>
                 {bucketLabels[bucket]}
               </option>
@@ -495,7 +500,21 @@ function entrySummary(entry: JournalEntry) {
   }
 
   if (entry.bucket === "food") {
-    return `${entry.data.calories ?? "No"} cal, protein ${entry.data.protein ?? "not set"}g`;
+    const amount = entry.data.amount;
+    const unit = entry.data.unit;
+    const calories = entry.data.calories;
+    const protein = entry.data.protein;
+    const parts: string[] = [];
+    if (amount !== null && amount !== undefined && amount !== "") {
+      parts.push([amount, unit].filter(Boolean).join(" "));
+    }
+    if (calories !== null && calories !== undefined) {
+      parts.push(`${Math.round(Number(calories))} cal`);
+    }
+    if (protein !== null && protein !== undefined) {
+      parts.push(`${Math.round(Number(protein))}g protein`);
+    }
+    return parts.length > 0 ? parts.join(" · ") : "Food";
   }
 
   if (entry.bucket === "exercise") {
