@@ -3,8 +3,7 @@ alter table public.journal_entries
   add column if not exists external_id text;
 
 create unique index if not exists journal_entries_external_uniq
-  on public.journal_entries (user_id, external_source, external_id)
-  where external_source is not null;
+  on public.journal_entries (user_id, external_source, external_id);
 
 create table if not exists public.cronometer_sync_state (
   user_id uuid primary key references auth.users(id) on delete cascade,
