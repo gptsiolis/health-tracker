@@ -9,7 +9,8 @@ export type Bucket =
   | "exercise"
   | "location"
   | "sleep"
-  | "notes";
+  | "notes"
+  | "nutrition";
 
 export type Variable = {
   id: string;
@@ -55,11 +56,13 @@ const bucketLabels: Record<Bucket, string> = {
   location: "Location",
   sleep: "Sleep",
   notes: "Notes",
+  nutrition: "Nutrition",
 };
 
 const bucketOptions: Bucket[] = [
   "supplements",
   "food",
+  "nutrition",
   "exercise",
   "location",
   "sleep",
@@ -67,7 +70,7 @@ const bucketOptions: Bucket[] = [
 ];
 
 const creatableBucketOptions: Bucket[] = bucketOptions.filter(
-  (bucket) => bucket !== "food",
+  (bucket) => bucket !== "food" && bucket !== "nutrition",
 );
 
 const sleepMetricOptions = [
@@ -626,6 +629,13 @@ function entrySummary(entry: JournalEntry) {
     }
 
     return `${entry.data.hours ?? "No"} hours, score ${entry.data.score ?? "not set"}`;
+  }
+
+  if (entry.bucket === "nutrition") {
+    const config = entryConfig(entry);
+    const data = entry.data as Record<string, unknown>;
+    const unit = (data.unit as string | undefined) ?? config?.unit;
+    return formatValueWithUnit(data.value as number | string | null | undefined, unit);
   }
 
   return "Note";

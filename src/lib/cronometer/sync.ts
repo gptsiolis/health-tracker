@@ -9,7 +9,24 @@ import { normalizeDiary, type FoodLookup } from "./normalize";
 import type { DiaryEntry, NormalizedFoodEntry } from "./types";
 
 const EXTERNAL_SOURCE = "cronometer";
+const TOTALS_EXTERNAL_SOURCE = "cronometer-totals";
 const VANCOUVER_TZ = "America/Vancouver";
+
+type NutritionKey = "calories" | "protein" | "carbs" | "fat" | "fiber";
+
+const NUTRITION_VARIABLES: Array<{
+  key: NutritionKey;
+  name: string;
+  unit: string;
+}> = [
+  { key: "calories", name: "Calories", unit: "kcal" },
+  { key: "protein", name: "Protein", unit: "g" },
+  { key: "carbs", name: "Carbs", unit: "g" },
+  { key: "fat", name: "Fat", unit: "g" },
+  { key: "fiber", name: "Fiber", unit: "g" },
+];
+
+const FIBER_MICRO_ID = "291";
 
 export type SyncOptions = {
   date?: string;
@@ -90,10 +107,12 @@ async function fetchFoodLookup(entries: DiaryEntry[]): Promise<FoodLookup> {
 async function resolveVariableId(
   supabase: SupabaseClient,
   userId: string,
-  foodName: string,
+  name: string,
+  bucket: string,
   cache: Map<string, string>,
+  defaults: Record<string, unknown> = {},
 ): Promise<string> {
-  const cacheKey = foodName.toLowerCase();
+  const cacheKey = `${bucket}::${name.toLowerCase()}`;
   const cached = cache.get(cacheKey);
   if (cached) {
     return cached;
@@ -103,8 +122,8 @@ async function resolveVariableId(
     .from("variables")
     .select("id")
     .eq("user_id", userId)
-    .eq("bucket", "food")
-    .eq("name", foodName)
+    .eq("bucket", bucket)
+    .eq("name", name)
     .maybeSingle();
 
   if (existing?.id) {
@@ -114,16 +133,99 @@ async function resolveVariableId(
 
   const { data: inserted, error } = await supabase
     .from("variables")
-    .insert({ user_id: userId, name: foodName, bucket: "food" })
+    .insert({ user_id: userId, name, bucket, ...defaults })
     .select("id")
     .single();
 
   if (error || !inserted) {
-    throw new Error(error?.message ?? "Failed to create food variable");
+    throw new Error(error?.message ?? `Failed to create ${bucket} variable`);
   }
 
   cache.set(cacheKey, inserted.id as string);
   return inserted.id as string;
+}
+
+function computeTotals(entries: NormalizedFoodEntry[]) {
+  const totals: Record<NutritionKey, number> = {
+    calories: 0,
+    protein: 0,
+    carbs: 0,
+    fat: 0,
+    fiber: 0,
+  };
+  for (const entry of entries) {
+    totals.calories += entry.calories ?? 0;
+    totals.protein += entry.protein ?? 0;
+    totals.carbs += entry.carbs ?? 0;
+    totals.fat += entry.fat ?? 0;
+    const fiber = entry.micros?.[FIBER_MICRO_ID];
+    if (typeof fiber === "number") {
+      totals.fiber += fiber;
+    }
+  }
+  return totals;
+}
+
+async function upsertNutritionTotals(
+  supabase: SupabaseClient,
+  userId: string,
+  date: string,
+  totals: Record<NutritionKey, number>,
+  variableCache: Map<string, string>,
+): Promise<{ inserted: number; skipped: number }> {
+  let inserted = 0;
+  let skipped = 0;
+
+  for (const variable of NUTRITION_VARIABLES) {
+    const variableId = await resolveVariableId(
+      supabase,
+      userId,
+      variable.name,
+      "nutrition",
+      variableCache,
+      {
+        config: {
+          field_type: "single_number",
+          label: variable.name,
+          unit: variable.unit,
+          show_time: false,
+        },
+      },
+    );
+
+    const value = Math.round(totals[variable.key] * 100) / 100;
+
+    const { error, count } = await supabase
+      .from("journal_entries")
+      .upsert(
+        {
+          user_id: userId,
+          variable_id: variableId,
+          bucket: "nutrition",
+          entry_date: date,
+          time_of_day: null,
+          data: { value, unit: variable.unit },
+          external_source: TOTALS_EXTERNAL_SOURCE,
+          external_id: `${date}-${variable.key}`,
+        },
+        {
+          onConflict: "user_id,external_source,external_id",
+          count: "exact",
+        },
+      );
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    if (count && count > 0) {
+      inserted += count;
+    } else {
+      skipped += 1;
+    }
+  }
+
+  return { inserted, skipped };
 }
 
 export async function syncCronometerForUser(
@@ -154,6 +256,7 @@ export async function syncCronometerForUser(
           supabase,
           userId,
           entry.foodName,
+          "food",
           variableCache,
         );
 
@@ -186,6 +289,17 @@ export async function syncCronometerForUser(
           skipped += 1;
         }
       }
+
+      const totals = computeTotals(normalized);
+      const totalsResult = await upsertNutritionTotals(
+        supabase,
+        userId,
+        date,
+        totals,
+        variableCache,
+      );
+      inserted += totalsResult.inserted;
+      skipped += totalsResult.skipped;
     }
 
     const lastSyncedAt = new Date().toISOString();
